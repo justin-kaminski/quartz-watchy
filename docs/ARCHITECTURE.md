@@ -213,6 +213,7 @@ clock (`settimeofday` via `hal::RtcClock::set_system_utc`) so TLS certificate ch
 | Manual set (UI/console) | anchor; `valid=true`, `source=Manual`; drift estimation window restarts |
 | SNTP success | if previous anchor came from SNTP, no manual set since, elapsed >= 6 h, residual within ±500 ppm: `drift_ppb += residual_ppb / 2` (clamp ±200 ppm); anchor; `source=Sntp`; `last_sync_utc` |
 | Residual > 500 ppm | treat as clock fault: anchor only, no drift update, log |
+| First eligible sync while `drift_ppb == 0` | (WP-04, [TUNE]) apply the whole residual (bootstrap gain 1) so +-50 ppm converges within 3 syncs; later syncs use gain 1/2. A residual is judged a clock fault only when a drift estimate is eligible. |
 | Time jump (any set) | services get `on_time_jump(old, new)` (steps rollover, schedules recomputed) |
 
 ### 8.3 Validity and indicators
