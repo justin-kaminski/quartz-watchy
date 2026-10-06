@@ -63,6 +63,12 @@ public:
     virtual Status inject(const model::InputEvent& event) = 0;
     [[nodiscard]] virtual std::string_view current_screen() const = 0;
     virtual Status show_screen(std::string_view name) = 0;
+    /// Names accepted by show_screen(), in id order (`screen list`). Added by WP-18: the console
+    /// cannot depend on qz_ui, so the app enumerates them. Default: none (the list is empty).
+    [[nodiscard]] virtual std::size_t screen_count() const { return 0; }
+    [[nodiscard]] virtual std::string_view screen_name_at(std::size_t /*index*/) const {
+        return {};
+    }
     [[nodiscard]] virtual std::size_t face_count() const = 0;
     [[nodiscard]] virtual std::uint8_t face_id_at(std::size_t index) const = 0;
     [[nodiscard]] virtual std::string_view face_name(std::uint8_t id) const = 0;
@@ -78,6 +84,9 @@ public:
     // radio (kUnsupported when compiled out)
     [[nodiscard]] virtual std::optional<FixedString<32>>
     wifi_ssid() const = 0; ///< never the password
+    /// Whether a non-empty password is stored (`wifi status`). Added by WP-18; the app overrides
+    /// it. Default: false.
+    [[nodiscard]] virtual bool wifi_has_password() const { return false; }
     virtual Status set_wifi(std::string_view ssid, std::string_view password) = 0;
     virtual Status clear_wifi() = 0;
     virtual Status sync_now(bool time, bool weather) = 0; ///< blocking, bounded by session budget
