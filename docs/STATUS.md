@@ -65,6 +65,7 @@ The four stopped agents keep their transcripts: `SendMessage` to the agent id re
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] TZ table (WP-03): 139 entries = ~9 KB (the 6 KiB goal is unreachable with `TzEntry`; ceiling is now 10 KiB). POSIX footers only apply after a zone's last tabulated transition, so Casablanca (until 2026-09-20) and Edmonton/Vancouver/Winnipeg (until 2026-11-01) are WRONG until then, and Gaza's Ramadan shifts are ignored; Chicago/Berlin/Sydney-style zones are unaffected. Consider flagging these in the zone picker.
 - [TECH-DEBT] SSD1681: outside 0-50 C the controller refuses an update but BUSY still falls; the app must gate on `temperature_dc()` (WP-07).
 - [TECH-DEBT] SSD1681: 0x1B/0x2D read framing (no dummy byte) is [ASSUMED]; platform must set 10 MHz SPI and the reset timing (WP-25) (WP-07).
 - [TECH-DEBT] BMA423: step-counter byte order and low-power counter read are [ASSUMED] until bring-up B7; I2C HAL must accept 64-byte writes (WP-25) (WP-08).
