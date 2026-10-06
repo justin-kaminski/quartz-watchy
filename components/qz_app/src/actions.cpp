@@ -7,15 +7,6 @@
 #include <algorithm>
 #include <cstdio>
 
-// WP-19 (qz_selftest) may land after WP-21: both entry points are resolved weakly so the app
-// links either way. [TECH-DEBT] remove once the selftest component is implemented.
-namespace qz::selftest {
-// NOLINTNEXTLINE(readability-redundant-declaration): adds the weak attribute
-[[gnu::weak]] Summary run(Context&, std::string_view, ReportSink&, std::uint32_t (*)()) noexcept;
-// NOLINTNEXTLINE(readability-redundant-declaration): adds the weak attribute
-[[gnu::weak]] std::span<const TestCase> all_tests() noexcept;
-} // namespace qz::selftest
-
 namespace qz::app {
 
 namespace {
@@ -370,9 +361,6 @@ Status Core::run_selftests_impl(std::string_view filter, console::JsonWriter* ou
     ctx.delay = &p_.delay;
     ctx.faces = &faces_;
     ctx.interactive = f_.selftest_interactive && tether_.state() == TetherState::kTethered;
-    if (&selftest::run == nullptr) {
-        return Errc::kUnsupported; // self-test component not linked yet
-    }
     JsonReportSink sink(out);
     if (out != nullptr) {
         out->begin_array("results");

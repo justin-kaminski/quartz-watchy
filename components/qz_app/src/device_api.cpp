@@ -10,12 +10,6 @@
 #include <array>
 #include <cstdio>
 
-// Weak so the app links before WP-19 (see actions.cpp).
-namespace qz::selftest {
-// NOLINTNEXTLINE(readability-redundant-declaration): adds the weak attribute
-[[gnu::weak]] std::span<const TestCase> all_tests() noexcept;
-} // namespace qz::selftest
-
 namespace qz::app {
 
 namespace {
@@ -446,9 +440,7 @@ Status Core::write_diag(std::string_view page, console::JsonWriter& out) {
 
 void Core::list_selftests(console::JsonWriter& out) {
     out.begin_array("tests");
-    const std::span<const selftest::TestCase> tests = &selftest::all_tests != nullptr
-                                                          ? selftest::all_tests()
-                                                          : std::span<const selftest::TestCase>{};
+    const std::span<const selftest::TestCase> tests = selftest::all_tests();
     for (const selftest::TestCase& test : tests) {
         out.begin_object();
         out.field("suite", test.suite);
