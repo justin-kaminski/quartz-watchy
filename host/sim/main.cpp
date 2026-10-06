@@ -17,7 +17,7 @@
 #include "qz_sim.hpp"
 
 #include <fstream>
-#include <print>
+#include <iostream>
 #include <span>
 #include <string>
 
@@ -30,16 +30,16 @@ int main(int argc, char** argv) {
     }
     const qz::sim::ParseOutcome parsed = qz::sim::parse_args(rest);
     if (!parsed.ok()) {
-        std::print(stderr, "qz_sim: {}\n{}", parsed.error, qz::sim::usage_text());
+        std::cerr << "qz_sim: " << parsed.error << "\n" << qz::sim::usage_text();
         return 2;
     }
     if (parsed.args.help) {
-        std::print("{}", qz::sim::usage_text());
+        std::cout << qz::sim::usage_text();
         return 0;
     }
     const auto png = qz::sim::render_png(parsed.args);
     if (!png) {
-        std::println(stderr, "qz_sim: render failed ({})", qz::to_token(png.error().code));
+        std::cerr << "qz_sim: render failed (" << qz::to_token(png.error().code) << ")\n";
         return 1;
     }
     std::ofstream out(parsed.args.out, std::ios::binary);
@@ -47,9 +47,9 @@ int main(int argc, char** argv) {
               static_cast<std::streamsize>(png->size()));
     out.close();
     if (!out) {
-        std::println(stderr, "qz_sim: cannot write {}", parsed.args.out);
+        std::cerr << "qz_sim: cannot write " << parsed.args.out << "\n";
         return 1;
     }
-    std::println("wrote {} ({} bytes)", parsed.args.out, png->size());
+    std::cout << "wrote " << parsed.args.out << " (" << png->size() << " bytes)\n";
     return 0;
 }
