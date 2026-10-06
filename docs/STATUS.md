@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-05 20:30 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-05 23:25 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -23,18 +23,42 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-05 
 ## Work packages
 | WP | State | Notes |
 |---|---|---|
-| WP-01 core runtime + base fakes | done | 200 tests; lead-reviewed |
-| WP-02..WP-30 | not started | see docs/ROADMAP.md; run them as Sonnet implementations, Opus review only for TZ/time, SSD1681, wake planner/app wiring, platform sleep |
+| WP-01 core runtime + base fakes | committed | 200 tests; lead-reviewed |
+| WP-11 power model + policy | committed | 71 tests; lead-reviewed; header defaults aligned (170 mAh, refresh every 30) |
+| WP-28 firmware config (partitions, sdkconfig, Kconfig) | committed | both variants build; offline-symbol guard in CI |
+| WP-02 civil time + POSIX-TZ | IN FLIGHT, uncommitted | agent a196a3f8f29b7b879 stopped at the last step (full 40-zone glibc oracle run, then gates + report) |
+| WP-05 graphics core + PNG | IN FLIGHT, uncommitted | agent abdc55d4504945955: 72 tests pass; remaining lint gate, mutation sanity checks, report |
+| WP-17 console protocol + dispatcher | IN FLIGHT, uncommitted | agent a25ca3eca507d425f: sources + header edits in; remaining tests, gates, report |
+| WP-08 BMA423 wrapper + fake | IN FLIGHT, nothing written | agent a62afeed68deb45ed had only read AGENTS.md; vendoring from the pinned SQFMI mirror still to do |
+| remaining WPs | not started | docs/ROADMAP.md |
+
+The four stopped agents keep their transcripts: `SendMessage` to the agent id resumes it with context intact.
+
+## Resume playbook (do this after every usage-window reset)
+1. `get_usage`; proceed only if the 5-hour window is < 50% used.
+2. Resume the four agents above with: "Usage window reset. Finish only the remaining steps with minimal tool calls
+   (no extra mutation testing), run your gates, report <= 200 words."
+3. For every finished WP the lead reviews and commits alone: `QZ_BUILD_DIR=build/lead tools/host.sh configure`,
+   build + run only that component's `qz_<c>_test`, `clang-format --dry-run --Werror` and `tools/tidy.sh <files>` on its files,
+   `python3 tools/check_deps.py`, one `tools/fw.sh build` if firmware-linked, read the non-test source, then
+   `git add components/qz_<c>` and commit (message: what, tests, "Reviewed: ..."). Other agents' half-written files make
+   the repo-wide gate unreliable until they finish.
+4. Next WPs by dependency: after 05 -> WP-06 (fonts), WP-07 (SSD1681); after 02 -> WP-03 (tz table), WP-04 (TimeKeeper),
+   WP-09 (settings) -> WP-10 (steps), WP-13 (conn), WP-14 (UI) -> 15/16 -> WP-23 (simulator = milestone M1);
+   after 17 -> WP-18; then 12, 19, 20, 21, 22, platform 24-27, 29, 30.
+5. Pacing (measured): 4 parallel Sonnet agents burn ~2.7 % of the 5-hour window per minute (the first burst used 96 % in
+   35 min and 13 % of the week). Run at most 3 agents, stop launching at ~85 %, and when the window is nearly spent let the
+   running agents finish, then END the turn after scheduling the next wake-up with `CronCreate` (one-shot, local time,
+   reset time + 6 min). Never idle in repeated waiting turns (overage cache TTL = 5 min -> ~$1 per turn).
+6. Opus is only reachable via `Agent(model="opus")`; reserve it for reviews of the TZ engine, SSD1681 driver and wake planner.
 
 ## Budget and pacing (read before spawning agents)
-- Plan: Pro (5-hour window) + extra usage capped at $40/month. The window hit 100% at ~19:45 CDT and
-  extra usage had reached $20.26 by 20:20 CDT: agents with 150+ tool calls over large contexts are
-  what burn it. **Tell agents to minimise tool calls (target <= 60), batch writes, run the gate in
-  one command, and never re-read files.**
-- Windows reset at 22:40 CDT, then every 5 hours. Run work in bursts right after a reset (<= 3-4
-  agents in parallel), idle while the window is spent, keep the remaining extra-usage credit as a
-  reserve for finishing an in-flight WP.
-- A session cannot switch its own model/effort; Opus is only reachable through `Agent(model="opus")`.
+- Plan: Pro (5-hour window, resets 03:40 CDT then every 5 h) + extra usage capped at $40/month. **$36.46 of the $40 is
+  spent (91 %)**: ~$20 by agents with 150+ tool calls over big contexts while the window was exhausted, and ~$13.5 by my own
+  idle waiting turns (overage drops the prompt-cache TTL to 5 min, so every 10-minute wait re-billed a ~450k-token context).
+  Treat the remaining $3.54 as untouchable.
+- Weekly usage was 41 % at 23:20 CDT on 2026-10-05 (resets 07:00 CDT on 2026-10-07).
+- Agents must use <= 60 tool calls and read only their sections (AGENTS.md "Working efficiently"); WP-11 (42 calls) shows it works.
 
 ## Tech debt / follow-ups
 - [TECH-DEBT] `FixedString(const char*)` documents truncation as a programmer error but clears silently (WP-01).
