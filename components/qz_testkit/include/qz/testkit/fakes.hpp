@@ -62,11 +62,56 @@ private:
     std::int64_t rtc_remainder_ = 0; ///< sub-microsecond RTC remainder in 1e-9 us, in [0, 1e9)
 };
 
-/// SSD1681 model: decodes the command protocol, keeps both RAM planes, BUSY timing, deep-sleep
-/// state and an update log; displayed() is what a viewer would see after the last update.
+/// Why FakeEpdPanel rejected a bus operation (Error{kInvalidState, detail = the enumerator}).
+/// Every violation also bumps violation_count() and is kept in last_violation(). Rules come from
+/// docs/research/ssd1681.md section 10.
+enum class EpdViolation : std::uint8_t {
+    kNone = 0,
+    kWhileBusy,               ///< command/data/read while BUSY high [s10 rule 2]
+    kWhileAsleep,             ///< any SPI traffic after 0x10 before a HW reset [rule 3]
+    kUnknownCommand,          ///< not in the modelled command set (s4)
+    kOtpProgramCommand,       ///< 08/09/0A/2A/30/36/39 OTP programming [rule 9]
+    kWrongParamCount,         ///< too few or too many parameter bytes [rule 5]
+    kBadParameter,            ///< out-of-range or reserved-bit value [rule 6]
+    kDataWithoutCommand,      ///< data byte with no command expecting it
+    kRamWriteOverflow,        ///< more RAM bytes than the window holds [rule 7]
+    kRamWriteIncomplete,      ///< RAM stream ended before the window was full [rule 7]
+    kCounterNotSet,           ///< RAM write without 0x4E/0x4F since the last window/stream [rule 7]
+    kCounterNotAtWindowStart, ///< counters not at the window's start corner (model limit)
+    kNoUpdateControl,         ///< 0x20 without a fresh 0x22 (POR FF use) [rule 8]
+    kUndocumentedUpdateValue, ///< 0x22 value outside the 12 documented ones [s5]
+    kNoTemperatureSource,     ///< temperature needed but never loaded/written [rule 8]
+    kExternalSensor,          ///< 0x18 = 48 on a board with TSCL/TSDA unconnected [rule 9]
+    kNoLut,                   ///< C7/CF without any LUT loaded since reset [s5]
+    kRamNotWritten,      ///< display update with a RAM plane never written since reset [rule 8]
+    kBusyWaitAfterSleep, ///< wait_idle() after 0x10: BUSY never falls [s2]
+    kBadReadLength,      ///< read() length differs from the read command's byte count
+    kReadWithoutCommand, ///< read() with no read command pending
+};
+
+/// Pseudo command code logged for a hardware reset (all real commands are < 0x100).
+inline constexpr std::uint16_t kEpdLogHardwareReset = 0x100;
+
+/// One accepted command: parameters (first 160 bytes) and the total byte count that followed it.
+struct EpdLogEntry {
+    std::uint16_t cmd = 0;
+    std::vector<std::uint8_t> params;
+    std::uint32_t data_len = 0;
+    bool operator==(const EpdLogEntry&) const = default;
+};
+
+/// SSD1681 model: decodes the command protocol (rejecting unknown, out-of-order, mis-sized and
+/// out-of-range traffic, see EpdViolation), keeps both RAM planes with window/address counters,
+/// models BUSY against the VirtualClock, deep sleep (only hardware_reset() wakes it; RAM contents
+/// are scrambled by a reset: retention is NOT modelled, R1 s1) and the panel image: a full update
+/// (0x22 F7/C7) shows BW RAM exactly, a partial one (FF/CF) changes only pixels where RED (old)
+/// differs from BW (new) [ssd1681.md s9.3, ASSUMED]. RAM bit order D7 = leftmost, polarity
+/// 1 = white; displayed() and ram_*_image() are in gfx polarity (1 = black ink).
+/// Updates outside 0..50 C (sensed) are refused (R1 s6 precaution) unless a custom LUT was written.
 class FakeEpdPanel final : public hal::EpdBus {
 public:
     explicit FakeEpdPanel(VirtualClock& clock);
+    explicit FakeEpdPanel(VirtualClock&&) = delete; // would dangle
     Status hardware_reset() override;
     Status command(std::uint8_t cmd) override;
     Status data(std::span<const std::uint8_t> bytes) override;
@@ -77,19 +122,178 @@ public:
     [[nodiscard]] std::uint32_t full_updates() const;
     [[nodiscard]] std::uint32_t partial_updates() const;
     [[nodiscard]] bool in_deep_sleep() const;
-    void fail_next_busy_wait(); ///< error injection
+    /// Error injection: the next wait for BUSY times out (BUSY is stuck high until the next
+    /// hardware_reset()). Applies to the current busy period if one is running, else to the next.
+    void fail_next_busy_wait();
+
+    // Additions (WP-07).
+    /// Raw RAM planes in controller polarity (1 = white): 5000 bytes, 25 per row.
+    [[nodiscard]] std::span<const std::uint8_t> ram_bw() const;
+    [[nodiscard]] std::span<const std::uint8_t> ram_red() const;
+    /// RAM planes rendered as images (1 = black ink), e.g. for PNG or comparison with a frame.
+    [[nodiscard]] gfx::Framebuffer ram_bw_image() const;
+    [[nodiscard]] gfx::Framebuffer ram_red_image() const;
+    Status encode_displayed_png(gfx::ByteSink& out) const;
+    Status encode_ram_bw_png(gfx::ByteSink& out) const;
+    /// Accepted commands in order (plus kEpdLogHardwareReset markers); rejected ones are absent.
+    [[nodiscard]] const std::vector<EpdLogEntry>& log() const;
+    void clear_log();
+    [[nodiscard]] std::uint32_t violation_count() const;
+    [[nodiscard]] EpdViolation last_violation() const;
+    [[nodiscard]] std::uint32_t hardware_resets() const;
+    [[nodiscard]] std::uint32_t soft_resets() const;
+    [[nodiscard]] std::uint32_t deep_sleep_entries() const;
+    [[nodiscard]] std::uint32_t refused_updates() const;      ///< temperature outside 0..50 C
+    [[nodiscard]] std::uint32_t aborted_updates() const;      ///< hardware reset while updating
+    void set_temperature_dc(std::int16_t temp_dc);            ///< sensed temperature, default 230
+    [[nodiscard]] std::uint16_t temperature_register() const; ///< 12-bit 0x1A value, POR 0x7FF
+    /// Bytes returned by read command 0x2D (A..K, 11 bytes) [ssd1681.md s4].
+    void set_otp_display_option(const std::array<std::uint8_t, 11>& bytes);
+    /// BUSY durations in virtual microseconds (defaults: full 2 s, partial 0.26 s [GD-SPEC 7-2],
+    /// load-only sequences 100 ms, SW reset 10 ms [ASSUMED]).
+    void set_busy_durations_us(std::int64_t full_us, std::int64_t partial_us);
+
+private:
+    struct Window {
+        std::uint16_t xsa = 0;
+        std::uint16_t xea = 0;
+        std::uint16_t ysa = 0;
+        std::uint16_t yea = 0;
+    };
+
+    void settle() const;
+    Status violate(EpdViolation v);
+    void por_registers();
+    Status finish_pending();
+    Status apply_params();
+    Status check_activation(std::uint8_t v);
+    Status activate();
+    Status start_ram_stream();
+    void begin_busy(std::int64_t duration_us);
+    void log_param_bytes(std::span<const std::uint8_t> bytes);
+
+    VirtualClock* clock_; ///< never null: set from the constructor's reference
+    std::array<std::array<std::uint8_t, gfx::kFrameBytes>, 2> ram_{}; ///< [0] BW 0x24, [1] RED 0x26
+    std::array<bool, 2> ram_written_{};
+    mutable gfx::Framebuffer displayed_{};
+    mutable bool pending_commit_ = false;
+    mutable gfx::Framebuffer pending_image_{};
+    mutable bool pending_is_full_ = false;
+    mutable std::uint32_t full_updates_ = 0;
+    mutable std::uint32_t partial_updates_ = 0;
+    std::int64_t busy_until_us_ = 0; ///< elapsed_us() at which BUSY falls; INT64_MAX = stuck
+    bool stick_next_busy_ = false;
+    bool asleep_ = false;
+    // Command decoding.
+    int pending_cmd_ = -1;
+    std::size_t expected_params_ = 0;
+    std::vector<std::uint8_t> params_;
+    std::size_t stream_plane_ = 0;
+    bool stream_started_ = false;
+    std::size_t stream_count_ = 0;
+    std::size_t stream_limit_ = 0;
+    // Registers (POR in por_registers()).
+    Window window_{};
+    std::uint8_t entry_mode_ = 0x03;
+    std::uint8_t counter_x_ = 0;
+    std::uint16_t counter_y_ = 0;
+    bool counter_x_set_ = false;
+    bool counter_y_set_ = false;
+    std::uint8_t sensor_select_ = 0x48;
+    std::uint8_t update_ctrl2_ = 0xFF;
+    bool ctrl2_written_ = false;
+    std::uint16_t temp_register_ = 0x7FF;
+    bool temperature_ready_ = false;
+    bool lut_ready_ = false;
+    bool lut_manual_ = false;
+    std::int16_t sensed_dc_ = 230;
+    std::array<std::uint8_t, 11> otp_option_{
+        0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x01, 0x00, 0x00, 0x00};
+    std::int64_t full_us_ = 2'000'000;
+    std::int64_t partial_us_ = 260'000;
+    // Diagnostics.
+    std::vector<EpdLogEntry> log_;
+    std::uint32_t violations_ = 0;
+    EpdViolation last_violation_ = EpdViolation::kNone;
+    std::uint32_t hw_resets_ = 0;
+    std::uint32_t sw_resets_ = 0;
+    std::uint32_t sleeps_ = 0;
+    std::uint32_t refused_ = 0;
+    std::uint32_t aborted_ = 0;
+    std::uint32_t scramble_state_ = 0x9E3779B9U;
 };
 
 /// BMA423 register model: chip id, config-blob upload sequence, INTERNAL_STATUS, step counter
 /// registers, interrupt status; steps added by tests.
 class FakeBma423 final : public hal::I2cDevice {
 public:
+    /// Without a clock the model has no notion of time: init_ok appears immediately and idle-time
+    /// rules are not checked. With one, INTERNAL_STATUS reads 0 until 140 ms after INIT_CTRL=1 and
+    /// accesses closer than 450 us to a write while adv_power_save = 1 count as violations.
+    FakeBma423();
+    explicit FakeBma423(const VirtualClock& clock);
+    explicit FakeBma423(const VirtualClock&&) = delete; // would dangle
     Status read_registers(std::uint8_t reg, std::span<std::uint8_t> out) override;
     Status write_registers(std::uint8_t reg, std::span<const std::uint8_t> data) override;
+    /// Steps the feature engine counts; dropped unless the engine runs with en_counter set.
     void add_steps(std::uint32_t n);
     void sensor_reset(); ///< power loss: counter -> 0, config lost
+    /// Latches the double-tap flag; ignored unless the engine runs with the feature enabled.
     void trigger_double_tap();
-    void fail_io(bool fail);
+    void fail_io(bool fail); ///< every access fails with kIo while true (counted, not applied)
+
+    // Additions (WP-08).
+    void set_chip_id(std::uint8_t id); ///< CHIP_ID answered from now on (survives resets)
+    void fail_config_load(bool fail);  ///< INIT_CTRL=1 then reports init error (0x02)
+    void raise_feature_interrupt(std::uint8_t status_0_bits);   ///< latch bits in INT_STATUS_0
+    [[nodiscard]] std::uint8_t reg(std::uint8_t address) const; ///< raw register, no side effects
+    [[nodiscard]] std::uint8_t feature_byte(std::size_t offset) const; ///< FEATURES_IN byte
+    [[nodiscard]] std::uint32_t read_calls() const;  ///< read_registers() calls, failed included
+    [[nodiscard]] std::uint32_t write_calls() const; ///< write_registers() calls, failed included
+    [[nodiscard]] std::uint32_t config_uploads() const;      ///< INIT_CTRL=1 after a full load
+    [[nodiscard]] std::uint32_t config_chunks() const;       ///< accepted bursts to FEATURES_IN
+    [[nodiscard]] std::size_t config_bytes_received() const; ///< distinct blob bytes loaded
+    [[nodiscard]] std::uint32_t config_crc32() const;        ///< CRC-32 of the 6144-byte image
+    [[nodiscard]] bool engine_running() const;               ///< INTERNAL_STATUS init_ok
+    [[nodiscard]] std::uint32_t soft_resets() const;         ///< CMD 0xB6 commands
+    [[nodiscard]] std::uint32_t step_counter() const;        ///< hardware counter value
+    /// Datasheet rules the host broke: odd/overrunning config bursts, feature access with
+    /// adv_power_save on, INIT_CTRL=1 on a running engine, (with a clock) idle-time violations.
+    [[nodiscard]] std::uint32_t protocol_violations() const;
+    /// INT1 pin: output enabled and a mapped feature interrupt latched.
+    [[nodiscard]] bool int1_active() const;
+    /// Electrical level of INT1 while its output is enabled (active-low pins idle high); false
+    /// when the output is disabled.
+    [[nodiscard]] bool int1_level_high() const;
+
+private:
+    void power_on_reset();
+    void check_idle(bool is_write);
+    void read_feature(std::span<std::uint8_t> out);
+    std::uint8_t read_one(std::uint8_t address);
+    void write_feature(std::span<const std::uint8_t> data);
+    void write_register(std::uint8_t address, std::uint8_t value);
+
+    const VirtualClock* clock_ = nullptr;
+    std::array<std::uint8_t, 0x80> regs_{};
+    std::array<std::uint8_t, 6144> config_{};
+    std::array<bool, 3072> word_loaded_{}; ///< per 16-bit word of the config image
+    std::array<std::uint8_t, 70> features_{};
+    std::uint8_t chip_id_ = 0x13;
+    std::uint8_t internal_status_ = 0;
+    std::int64_t init_ready_us_ = 0; ///< INTERNAL_STATUS shows 0 before this (clock mode)
+    std::int64_t last_write_us_ = -1;
+    std::uint32_t counter_ = 0;
+    bool loading_ = false; ///< INIT_CTRL = 0: FEATURES_IN accepts the config image
+    bool engine_ = false;
+    bool fail_io_ = false;
+    bool fail_load_ = false;
+    std::uint32_t reads_ = 0;
+    std::uint32_t writes_ = 0;
+    std::uint32_t uploads_ = 0;
+    std::uint32_t chunks_ = 0;
+    std::uint32_t soft_resets_ = 0;
+    std::uint32_t violations_ = 0;
 };
 
 /// Scriptable buttons, USB/charge pins, battery ADC pin and vibration motor. Starts with no button
@@ -156,12 +360,23 @@ public:
     Status erase_key(std::string_view ns, std::string_view key) override;
     Status erase_namespace(std::string_view ns) override;
     Status commit() override;
+    /// Mutations since construction: every set_* call (even with an unchanged value, so redundant
+    /// caller writes are caught) and every erase that removed an entry. commit() is not counted.
     [[nodiscard]] std::uint32_t write_count() const;
-    [[nodiscard]] bool contains_text(std::string_view needle) const; ///< credential-leak checks
+    [[nodiscard]] std::uint32_t commit_count() const; ///< commit() calls since construction
+    /// Number of entries currently stored in namespace `ns`.
+    [[nodiscard]] std::size_t entry_count(std::string_view ns) const;
+    /// True if `needle` occurs in any stored value or key name ("ns/key"). Credential-leak checks.
+    [[nodiscard]] bool contains_text(std::string_view needle) const;
+    /// Fault injection: after `writes` further successful mutations every set_*/erase_* fails with
+    /// Errc::kIo. Negative = never fail (default).
+    void fail_writes_after(std::int32_t writes);
 
 private:
-    std::map<std::string, std::vector<std::uint8_t>> entries_; // "ns/key" -> typed bytes
+    std::map<std::string, std::vector<std::uint8_t>> entries_; // "ns/key" -> tag byte + payload
     std::uint32_t writes_ = 0;
+    std::uint32_t commits_ = 0;
+    std::int32_t fail_after_ = -1;
 };
 
 /// Two fixed byte regions that start zeroed and keep their content across "wakes" (the object

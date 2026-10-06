@@ -65,6 +65,11 @@ The four stopped agents keep their transcripts: `SendMessage` to the agent id re
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] SSD1681: outside 0-50 C the controller refuses an update but BUSY still falls; the app must gate on `temperature_dc()` (WP-07).
+- [TECH-DEBT] SSD1681: 0x1B/0x2D read framing (no dummy byte) is [ASSUMED]; platform must set 10 MHz SPI and the reset timing (WP-25) (WP-07).
+- [TECH-DEBT] BMA423: step-counter byte order and low-power counter read are [ASSUMED] until bring-up B7; I2C HAL must accept 64-byte writes (WP-25) (WP-08).
+- [TECH-DEBT] WP-26: the console dispatcher needs a line buffer of >= 257 bytes (WP-17).
+- [TECH-DEBT] qz_power: curve/thresholds unmeasured [TUNE B6]; EWMA not re-seeded on USB plug/unplug (WP-11).
 
 ## Environment notes
 - ESP-IDF v6.1 in `.toolchain/` (bootstrap: `tools/bootstrap.sh`); dev venv in `.venv/` (`tools/setup-dev.sh`).

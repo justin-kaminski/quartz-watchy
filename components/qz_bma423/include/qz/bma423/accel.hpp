@@ -34,7 +34,9 @@ public:
     Accelerometer(hal::I2cDevice& dev, hal::Delay& delay) noexcept;
 
     /// Cold init: soft reset, chip id check (kNotFound if wrong), config blob upload, feature
-    /// enable (step counter), remap, INT1 config. ~100 ms. Errc::kIo/kCorrupt on failure.
+    /// enable (step counter), remap, INT1 config. About 330 ms (10 ms reset wait + 96 config bursts
+    /// + the 150 ms init wait). Errc::kIo/kCorrupt on failure. Nothing is written to a device
+    /// whose chip id is wrong.
     Status init(const Config& config) noexcept;
     /// Warm attach after deep sleep: no reset, only verifies chip id (fast path, < 2 ms).
     Status attach() noexcept;
