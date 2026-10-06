@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pins:
+    name: Version pins are consistent
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: .idf-version matches the firmware container tag
+        run: |
+          pinned="$(tr -d '[:space:]' < .idf-version)"
+          grep -qx "      image: espressif/idf:${pinned}" .github/workflows/ci.yml \
+            || { echo "::error::.idf-version (${pinned}) does not match the container image in ci.yml"; exit 1; }
+
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: tools/format.sh --check
+
+  host:
+    name: Host build, unit tests and golden images (ASan+UBSan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: tools/host.sh all
+      - name: Upload golden-image diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: golden-diffs
+          path: build/host/golden-diff/
+          if-no-files-found: ignore
+
+  tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: tools/tidy.sh
+
+  firmware:
+    name: Firmware build (ESP-IDF container)
+    runs-on: ubuntu-24.04
+    container:
+      image: espressif/idf:v6.1
+    env:
+      QZ_USE_SYSTEM_IDF: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Trust the workspace (container user differs from checkout owner)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Verify the container's ESP-IDF matches .idf-version
+        run: |
+          expected="$(tr -d '[:space:]' < .idf-version)"
+          tools/idf.sh idf.py --version | grep -q "ESP-IDF ${expected}"
+      - name: Build
+        run: tools/fw.sh build
+      - name: Upload firmware images
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: firmware
+          path: |
+            build/fw/quartz.bin
+            build/fw/bootloader/bootloader.bin
+            build/fw/partition_table/partition-table.bin
+          if-no-files-found: error

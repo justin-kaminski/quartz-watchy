@@ -1,0 +1,23 @@
+# Toolchain and build outputs
+/.toolchain/
+/build/
+/build-*/
+/.venv/
+/.cache/
+__pycache__/
+*.pyc
+compile_commands.json
+sdkconfig
+sdkconfig.old
+/managed_components/
+/dist/
+
+# The original product brief lives at the repo root with an awkward filename;
+# the canonical copy is docs/SPEC.md.
+/# Watchy v3 Custom Firmware.md
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store

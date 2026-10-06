@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.bin binary
+*.pbm binary
+# Golden images are reviewed visually, never line-diffed.
+test/golden/**/*.png binary -diff
+components/**/golden/**/*.png binary -diff

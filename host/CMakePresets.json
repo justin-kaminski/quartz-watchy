@@ -1,0 +1,61 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Host (ASan+UBSan, Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../build/host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "QZ_SANITIZE": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Host (Release, no sanitizers)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../build/host-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "QZ_SANITIZE": "OFF"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Host (gcov coverage)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../build/host-coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "QZ_SANITIZE": "OFF",
+        "QZ_COVERAGE": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "default", "configurePreset": "default" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "coverage", "configurePreset": "coverage" }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "jobs": 8 }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "jobs": 8 }
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "jobs": 8 }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+# Pinned developer/CI tooling (installed into .venv by tools/setup-dev.sh).
+# Pins make local runs and CI produce identical format/lint results.
+clang-format==23.1.1
+clang-tidy==22.1.8
+gcovr==8.4
+pytest==9.0.0
+pyserial==3.5

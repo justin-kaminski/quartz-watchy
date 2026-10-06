@@ -1,0 +1,45 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 100
+PointerAlignment: Left
+DerivePointerAlignment: false
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackParameters: false
+IndentCaseLabels: true
+InsertBraces: true
+InsertNewlineAtEOF: true
+KeepEmptyLines:
+  AtStartOfBlock: false
+  AtEndOfFile: false
+  AtStartOfFile: false
+MaxEmptyLinesToKeep: 1
+SpaceAfterTemplateKeyword: false
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<qz/'
+    Priority: 2
+  - Regex: '^<(gtest|gmock|unity|cJSON)'
+    Priority: 4
+  - Regex: '^<[a-z_]+\.h>$'
+    Priority: 3
+  - Regex: '^<[a-z_]+>$'
+    Priority: 5
+  - Regex: '^".*"$'
+    Priority: 1
+  - Regex: '.*'
+    Priority: 6
+Standard: Latest
+...
