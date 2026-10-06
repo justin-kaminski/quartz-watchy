@@ -13,6 +13,7 @@ Stable, power-efficient, fully tested, wearable every day. No hacks, no shortcut
 | Decisions, open questions, pushback | `docs/DECISIONS.md`, `docs/OPEN_QUESTIONS.md`, `docs/PUSHBACK.md` |
 | Hardware / datasheet facts (sourced) | `docs/research/*.md` |
 | Owner steps that need the physical watch | `docs/HARDWARE_BRINGUP.md` |
+| Power model + measured baseline, release process | `docs/POWER_BUDGET.md`, `docs/RELEASE.md`, `CHANGELOG.md` |
 | Current status and known tech debt | `docs/STATUS.md` |
 
 ## Ground rules
@@ -57,6 +58,13 @@ The owner's usage budget is limited; cost scales with tool calls x context size.
   `tools/format.sh >/dev/null; QZ_BUILD_DIR=build/wpNN tools/host.sh configure >/dev/null && cmake --build build/wpNN --target qz_<c>_test 2>&1 | tail -30 && build/wpNN/qz_<c>_test 2>&1 | tail -15`
   (building only your target keeps other agents' half-written files out of your build).
 - Run the full gate (`tools/check.sh --fast`, plus `tools/fw.sh build` if firmware-linked code changed) once at the end.
+
+## Skills (`.claude/skills/<name>/SKILL.md`, concrete steps with exact commands)
+- `build-flash-monitor`: build both variants, find the port, download mode, flash, monitor, console (flashing is owner-only).
+- `add-watch-face`: face source + registry row + tests + golden scenes (`qz_golden --update`) + `qz_sim` preview.
+- `add-console-command`: `commands_*.cpp` row, `DeviceApi`, OK/ERR test cases, registry-introspection tests, docs table.
+- `power-measurement`: bring-up B9 with a profiler, recording in `docs/POWER_BUDGET.md` (10 % regression rule).
+- `release`: version, changelog, `tools/release.sh` (never tags or pushes), checklist in `docs/RELEASE.md`.
 
 ## Conventions (summary of ARCHITECTURE section 2)
 C++23, no exceptions/RTTI, `qz::Status`/`qz::Result<T>`, no heap on the wake path, integer-only
