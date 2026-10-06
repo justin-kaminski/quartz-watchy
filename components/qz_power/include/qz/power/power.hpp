@@ -52,8 +52,9 @@ struct PolicyDecision {
     bool radio_allowed = true;
     bool tap_wake_allowed = true;
     bool vibration_allowed = true;
-    std::uint16_t display_period_min = 1;  ///< 1 normal/low, 5 saver, 0 = no timer (critical)
-    std::uint16_t full_refresh_every = 60; ///< partial updates between full refreshes
+    std::uint16_t display_period_min = 1; ///< 1 normal/low, 5 saver, 0 = no timer (critical)
+    std::uint16_t full_refresh_every =
+        30; ///< partial updates between full refreshes (ARCH s14, Q-02)
     bool charge_me_screen = false;
 };
 
@@ -78,7 +79,8 @@ private:
 
 /// Battery-life estimate from measured constants (bring-up B9) and today's awake stats.
 struct EstimateInputs {
-    std::uint32_t capacity_mah = 200;
+    std::uint32_t capacity_mah =
+        170; ///< usable cell capacity (datasheet min 170, typ 180; PUSHBACK P-08)
     std::uint32_t sleep_floor_ua = 50; ///< [TUNE]
     std::uint32_t active_ma = 25;      ///< [TUNE]
     std::uint32_t awake_ms_per_day = 0;
