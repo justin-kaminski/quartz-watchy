@@ -95,6 +95,12 @@ private:
     hal::KvStore& kv_;
 };
 
+/// Validates credentials for storage (the same rules apply to console `wifi set` and the
+/// provisioning form): SSID 1..32 printable ASCII/UTF-8 bytes without control characters;
+/// password empty (open network), 8..63 printable ASCII characters, or 64 hex digits (raw PSK).
+/// Returns kBadArgs; never logs or returns the offending value.
+[[nodiscard]] Status validate_credentials(const hal::WifiCredentials& creds) noexcept;
+
 /// Wi-Fi credentials in NVS namespace qz_cred. Never logs values.
 class CredentialStore {
 public:

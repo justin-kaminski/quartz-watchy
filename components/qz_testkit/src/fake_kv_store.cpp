@@ -217,8 +217,8 @@ Status FakeKvStore::erase_namespace(std::string_view ns) {
     for (auto it = entries_.lower_bound(prefix);
          it != entries_.end() && it->first.starts_with(prefix);) {
         if (!write_allowed(fail_after_)) {
-        return Errc::kIo;
-    }
+            return Errc::kIo;
+        }
         it = entries_.erase(it);
         ++writes_;
     }
@@ -252,12 +252,10 @@ bool FakeKvStore::contains_text(std::string_view needle) const {
         return false;
     }
     const auto contains = [needle](const auto& haystack_begin, const auto& haystack_end) {
-        return std::search(haystack_begin,
-                           haystack_end,
-                           needle.begin(),
-                           needle.end(),
-                           [](auto a, auto b) { return static_cast<char>(a) == b; }) !=
-               haystack_end;
+        return std::search(
+                   haystack_begin, haystack_end, needle.begin(), needle.end(), [](auto a, auto b) {
+                       return static_cast<char>(a) == b;
+                   }) != haystack_end;
     };
     return std::ranges::any_of(entries_, [&](const auto& entry) {
         return contains(entry.first.begin(), entry.first.end()) ||
