@@ -9,6 +9,7 @@
 #include "qz/model/types.hpp"
 #include "qz/weather/provider.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -78,6 +79,17 @@ public:
     /// Mode or credentials changed: make jobs due now (manual reconfiguration).
     void on_config_changed() noexcept;
 
+    /// Backoff before jitter: min(15 min x 2^(streak-1), min(interval, 12 h)) in seconds; 0 for
+    /// streak 0. `interval_s` is clamped to at least 15 min.
+    [[nodiscard]] static std::int64_t backoff_base_s(std::uint8_t fail_streak,
+                                                     std::int64_t interval_s) noexcept;
+    /// backoff_base_s x (1 +- 10 %), the jitter being a pure function of (seed, streak).
+    [[nodiscard]] static std::int64_t
+    backoff_delay_s(std::uint8_t fail_streak, std::int64_t interval_s, std::uint32_t seed) noexcept;
+    /// Delay before the next attempt for the current fail streak, relative to "now" (RTC based
+    /// pacing for the app while UTC is invalid and next_* cannot be expressed). 0 = no backoff.
+    [[nodiscard]] std::int64_t retry_delay_s(const Inputs& in) const noexcept;
+
 private:
     ConnState& state_;
     std::uint32_t seed_;
@@ -88,15 +100,21 @@ private:
 class SyncSession {
 public:
     SyncSession(hal::NetStack& net, const weather::Provider& provider, hal::Clock& clock) noexcept;
+    /// `now_utc` (0 = unknown) stamps the weather report when this session does not sync time
+    /// itself; if SNTP succeeds in this session its time is used instead. Weather without any
+    /// known UTC fails with kNoTime (no network call). Every attempted session ends with
+    /// NetStack::shutdown(); an empty plan or empty SSID never touches the radio.
     SessionResult run(const Plan& plan,
                       const hal::WifiCredentials& creds,
                       const model::Location& loc,
-                      const Budget& budget) noexcept;
+                      const Budget& budget,
+                      time::UnixSeconds now_utc = 0) noexcept;
 
 private:
     hal::NetStack& net_;
     const weather::Provider& provider_;
     hal::Clock& clock_;
+    std::array<char, weather::kMaxBodyBytes> body_{};
 };
 
 /// Fields submitted by the provisioning page (raw strings, validated by the app through
@@ -118,6 +136,16 @@ public:
     virtual Status apply(const ProvisioningForm& form) = 0;
 };
 
+/// Characters of the generated AP password: digits 2-9 and letters without I, O, l, o (56 symbols;
+/// 12 characters ~ 69.7 bits). Excludes every character easily confused with another.
+inline constexpr std::string_view kPasswordAlphabet =
+    "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+inline constexpr std::size_t kPasswordLength = 12;
+/// Largest accepted POST body. Form keys: ssid, pass, tz, lat, lon, units, mode, token (the
+/// one-time form token). `pass` may be empty (open network); `lat`/`lon` may be empty (location
+/// not set); the other fields must be non-empty. Every key must appear exactly once.
+inline constexpr std::size_t kMaxFormBytes = 1024;
+
 /// Provisioning session: random AP credentials, page HTML, urlencoded form parsing,
 /// one-time token, 5 min expiry. Implements the pure side of hal::ProvisioningPortal.
 class Provisioning final : public hal::PortalHandler {
@@ -128,6 +156,11 @@ public:
     [[nodiscard]] std::string_view ssid() const noexcept;
     [[nodiscard]] const Secret<64>& password() const noexcept; ///< shown on the watch only
     [[nodiscard]] bool expired(std::int64_t now_rtc_us) const noexcept;
+    /// Latches expiry: the portal loop calls this each poll; once true, submit() is refused and
+    /// the secrets are wiped. Returns expired(now_rtc_us).
+    bool tick(std::int64_t now_rtc_us) noexcept;
+    /// Ends the session (AP stopped): wipes password and token, refuses further submits.
+    void end() noexcept;
     [[nodiscard]] bool completed() const noexcept;
     std::string_view page() override;
     Result<std::string_view> submit(std::string_view form_body) override;
@@ -138,6 +171,13 @@ public:
 private:
     hal::System& system_;
     FormSink& sink_;
+    FixedString<11> ssid_;
+    Secret<64> password_;
+    FixedString<16> token_;
+    std::int64_t begin_rtc_us_ = 0;
+    bool active_ = false;
+    bool completed_ = false;
+    std::array<char, 2048> page_{};
 };
 
 } // namespace qz::conn

@@ -451,10 +451,22 @@ private:
     std::uint32_t restarts_ = 0;
 };
 
-/// Scriptable network: per-call results, latency in virtual time, call counters.
+/// One recorded FakeNetStack call.
+enum class NetCall : std::uint8_t { kConnect, kSntp, kHttp, kShutdown };
+
+/// Scriptable network. Each script_* call appends one scripted outcome for the next call of that
+/// kind; when the queue runs dry the last outcome repeats (sticky), and before any script the
+/// defaults apply (connect ok, SNTP ok with VirtualClock ground truth, HTTP 200 with empty body;
+/// zero latency). A call advances the VirtualClock by its latency, capped at the caller's timeout:
+/// latency > timeout_ms returns Errc::kTimeout after advancing by timeout_ms (like a real
+/// blocking call). connect() increments radio_init_count() every time (esp_wifi_init runs even if
+/// association then fails) and turns the radio on until shutdown(). Calling sntp_sync/https_get
+/// with the radio off, or connect() twice without shutdown(), is a caller bug: it fails with
+/// Errc::kInvalidState and bumps violations().
 class FakeNetStack final : public hal::NetStack {
 public:
     explicit FakeNetStack(VirtualClock& clock);
+    explicit FakeNetStack(VirtualClock&&) = delete; // would dangle
     Status connect(const hal::WifiCredentials& creds, std::uint32_t timeout_ms) override;
     Result<std::int64_t> sntp_sync(std::uint32_t timeout_ms, std::int64_t* rtc_us_at_utc) override;
     Result<hal::HttpResponse>
@@ -462,9 +474,63 @@ public:
     void shutdown() override;
     [[nodiscard]] std::uint32_t radio_init_count() const override;
     void script_connect(Status result, std::uint32_t latency_ms);
+    /// SNTP outcome: success answers the VirtualClock ground truth (true_utc_us) at the RTC instant
+    /// the answer arrives; an error is returned as is.
+    void script_sntp(Status result, std::uint32_t latency_ms);
+    /// SNTP success with a fixed (possibly bogus) UTC answer.
+    void script_sntp_utc(std::int64_t utc_us, std::uint32_t latency_ms);
+    /// HTTP response with `status` and `body`; a body larger than the caller's buffer is cut and
+    /// flagged truncated.
     void script_http(std::uint16_t status, std::string body, std::uint32_t latency_ms);
+    /// Transport-level HTTP failure (no response).
+    void script_http_error(Error error, std::uint32_t latency_ms);
     [[nodiscard]] std::uint32_t connect_calls() const;
+    [[nodiscard]] std::uint32_t sntp_calls() const;
+    [[nodiscard]] std::uint32_t http_calls() const;
+    [[nodiscard]] std::uint32_t shutdown_calls() const;
+    [[nodiscard]] std::uint32_t violations() const;
     [[nodiscard]] bool radio_on() const;
+    /// Every call in order (connect, SNTP, HTTP, shutdown).
+    [[nodiscard]] const std::vector<NetCall>& calls() const;
+    [[nodiscard]] const hal::WifiCredentials& last_credentials() const;
+    [[nodiscard]] std::uint32_t last_connect_timeout_ms() const;
+    [[nodiscard]] std::uint32_t last_sntp_timeout_ms() const;
+    [[nodiscard]] std::uint32_t last_http_timeout_ms() const;
+    [[nodiscard]] const std::string& last_url() const;
+
+private:
+    struct Step {
+        Status status;
+        std::uint32_t latency_ms = 0;
+        std::optional<std::int64_t> utc_us; ///< SNTP: fixed answer instead of ground truth
+        std::uint16_t http_status = 200;
+        std::string body;
+    };
+    /// Pops the next scripted step (sticky last) or returns the default.
+    static Step next_step(std::deque<Step>& queue, std::optional<Step>& last);
+    /// Advances the clock by min(latency, timeout); true if the latency fits the timeout.
+    bool wait(std::uint32_t latency_ms, std::uint32_t timeout_ms);
+
+    VirtualClock* clock_; ///< never null: set from the constructor's reference
+    std::deque<Step> connect_q_;
+    std::deque<Step> sntp_q_;
+    std::deque<Step> http_q_;
+    std::optional<Step> connect_last_;
+    std::optional<Step> sntp_last_;
+    std::optional<Step> http_last_;
+    std::vector<NetCall> calls_;
+    hal::WifiCredentials last_credentials_;
+    std::string last_url_;
+    std::uint32_t connects_ = 0;
+    std::uint32_t sntps_ = 0;
+    std::uint32_t https_ = 0;
+    std::uint32_t shutdowns_ = 0;
+    std::uint32_t violations_ = 0;
+    std::uint32_t init_count_ = 0;
+    std::uint32_t connect_timeout_ms_ = 0;
+    std::uint32_t sntp_timeout_ms_ = 0;
+    std::uint32_t http_timeout_ms_ = 0;
+    bool radio_on_ = false;
 };
 
 /// Captures console output lines; feeds scripted request lines.
