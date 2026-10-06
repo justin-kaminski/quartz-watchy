@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 14:50 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 16:20 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -31,10 +31,11 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 
 | WP-24 platform HAL basics, 25 platform sleep/EPD bus/I2C (IDF-only, build-verified only), 28 firmware config | committed |
 | WP-23 face-only simulator (milestone M1) | committed (`--press/--scene/--console` still open: the app now exists, so they can be added) |
 | WP-19 selftest + 61 goldens, WP-22 virtual-time week suite (18 scenarios), WP-27 radio (Wi-Fi/SNTP/HTTPS/provisioning portal) | committed |
-| Not started | WP-23 rest (`--press/--scene/--console` in the simulator), WP-29 qzctl + on-device test automation, WP-30 skills/docs/release/power budget, an Opus review pass over wake_planner/sleep/app wiring/radio; then whatever the first hardware flash finds |
+| WP-29 qzctl + device test skeletons, WP-30 README/skills/release flow/power budget | committed |
+| Remaining | WP-23 rest (`qz_sim --press/--scene/--console`), tech-debt items below, and everything the first hardware flash finds |
 
 Full gate at 12:05 CDT: `tools/check.sh --fw` = 1348 host tests (ASan+UBSan), tidy, generated-file checks, both firmware variants, offline-symbol check: all green.
-FIRST FLASH IS NOW POSSIBLE: `main/` wiring, the USB console port and the platform init exist (radio image 1.18 MiB with the radio now implemented but never run; the first-flash guide still describes the radio-off behaviour of the earlier image: re-read docs/FIRST_FLASH.md before flashing the radio variant). Follow docs/FIRST_FLASH.md. Nothing has run on hardware.
+FIRST FLASH IS POSSIBLE (flash the OFFLINE image first, see docs/FIRST_FLASH.md; an Opus pre-flash review found no blockers and its fixes are in): `main/` wiring, the USB console port and the platform init exist (radio image 1.18 MiB with the radio now implemented but never run; the first-flash guide still describes the radio-off behaviour of the earlier image: re-read docs/FIRST_FLASH.md before flashing the radio variant). Follow docs/FIRST_FLASH.md. Nothing has run on hardware.
 
 ## Resume playbook (do this after every usage-window reset)
 1. `get_usage`; proceed only if the 5-hour window is < 50% used.
