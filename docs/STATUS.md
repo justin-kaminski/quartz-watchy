@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-05 23:25 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 09:20 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -21,31 +21,31 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-05 
 | M5 full feature | not started |
 
 ## Work packages
-| WP | State | Notes |
-|---|---|---|
-| WP-01 core runtime + base fakes | committed | 200 tests; lead-reviewed |
-| WP-11 power model + policy | committed | 71 tests; lead-reviewed; header defaults aligned (170 mAh, refresh every 30) |
-| WP-28 firmware config (partitions, sdkconfig, Kconfig) | committed | both variants build; offline-symbol guard in CI |
-| WP-02 civil time + POSIX-TZ | IN FLIGHT, uncommitted | agent a196a3f8f29b7b879 stopped at the last step (full 40-zone glibc oracle run, then gates + report) |
-| WP-05 graphics core + PNG | IN FLIGHT, uncommitted | agent abdc55d4504945955: 72 tests pass; remaining lint gate, mutation sanity checks, report |
-| WP-17 console protocol + dispatcher | IN FLIGHT, uncommitted | agent a25ca3eca507d425f: sources + header edits in; remaining tests, gates, report |
-| WP-08 BMA423 wrapper + fake | IN FLIGHT, nothing written | agent a62afeed68deb45ed had only read AGENTS.md; vendoring from the pinned SQFMI mirror still to do |
-| remaining WPs | not started | docs/ROADMAP.md |
+| WP | State |
+|---|---|
+| WP-01 core + base fakes, WP-02 civil time + POSIX-TZ, WP-03 TZ table, WP-04 TimeKeeper | committed |
+| WP-05 gfx + PNG, WP-06 fonts (Spleen), WP-16 faces (default + minimal) | committed |
+| WP-07 SSD1681 driver + panel model, WP-08 BMA423 wrapper + fake | committed |
+| WP-09 settings + KV fake, WP-10 steps, WP-11 power, WP-12 weather, WP-13 connectivity logic | committed |
+| WP-17 console protocol + dispatcher, WP-28 firmware config | committed |
+| WP-23 face-only simulator (milestone M1) | committed (`--press/--scene/--console` need the app) |
+| Not started | WP-14 UI framework, 15 system screens, 18 console catalog, 19 self-test + goldens, 20 app core, 21 app wiring, 22 virtual-time suite, 24-27 platform/radio (IDF-only), 29 qzctl + device tests, 30 skills/docs/release |
 
-The four stopped agents keep their transcripts: `SendMessage` to the agent id resumes it with context intact.
+Full gate at 09:20 CDT: `tools/check.sh --fw` = 1067 host tests (ASan+UBSan), tidy, both firmware variants, offline-symbol check: all green.
+Milestone M1 (host face) is done: `build/host/sim/qz_sim --face default --time ... --out face.png` (see host/sim/main.cpp).
 
 ## Resume playbook (do this after every usage-window reset)
 1. `get_usage`; proceed only if the 5-hour window is < 50% used.
-2. Resume the four agents above with: "Usage window reset. Finish only the remaining steps with minimal tool calls
-   (no extra mutation testing), run your gates, report <= 200 words."
+2. (No agents are in flight.)
 3. For every finished WP the lead reviews and commits alone: `QZ_BUILD_DIR=build/lead tools/host.sh configure`,
    build + run only that component's `qz_<c>_test`, `clang-format --dry-run --Werror` and `tools/tidy.sh <files>` on its files,
    `python3 tools/check_deps.py`, one `tools/fw.sh build` if firmware-linked, read the non-test source, then
    `git add components/qz_<c>` and commit (message: what, tests, "Reviewed: ..."). Other agents' half-written files make
    the repo-wide gate unreliable until they finish.
-4. Next WPs by dependency: after 05 -> WP-06 (fonts), WP-07 (SSD1681); after 02 -> WP-03 (tz table), WP-04 (TimeKeeper),
-   WP-09 (settings) -> WP-10 (steps), WP-13 (conn), WP-14 (UI) -> 15/16 -> WP-23 (simulator = milestone M1);
-   after 17 -> WP-18; then 12, 19, 20, 21, 22, platform 24-27, 29, 30.
+4. Next WPs, in order: WP-14 (UI framework) -> WP-15 (system screens) and WP-18 (console catalog, needs 17+09)
+   -> WP-20 (app core: RTC state, tether, wake planner) -> WP-21 (app wiring + DeviceApi) -> WP-22 (virtual-time suite)
+   -> WP-19 (selftest/goldens) -> WP-23 rest (--press/--scene/--console); platform in parallel: WP-24, 25 (opus review),
+   26, 27, then WP-29/30. Reviews: read the non-test source of critical modules (wake planner, sleep/GPIO, app wiring).
 5. Pacing (measured): 4 parallel Sonnet agents burn ~2.7 % of the 5-hour window per minute (the first burst used 96 % in
    35 min and 13 % of the week). Run at most 3 agents, stop launching at ~85 %, and when the window is nearly spent let the
    running agents finish, then END the turn after scheduling the next wake-up with `CronCreate` (one-shot, local time,
