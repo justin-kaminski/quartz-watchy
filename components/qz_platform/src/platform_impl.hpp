@@ -17,6 +17,7 @@
 #include "qz/hal/i2c.hpp"
 #include "qz/hal/kv_store.hpp"
 #include "qz/hal/system.hpp"
+#include "qz/platform/idf_platform.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -80,12 +81,9 @@ public:
     void set_system_utc_us(std::int64_t utc_us) override;
 };
 
-/// Sizes of the RTC_NOINIT regions. The platform cannot include qz_app (layering), so they are
-/// fixed here with headroom; main/ static_asserts sizeof(app::RtcState) / sizeof(app::FrameShadow)
-/// against them. Budget (ARCHITECTURE.md section 6): total RTC use <= 7.5 KiB of 8 KiB.
-inline constexpr std::size_t kRtcStateRegionBytes = 2048; ///< sizeof(RtcState) is 1024 today
-inline constexpr std::size_t kRtcFrameRegionBytes = 5024; ///< FrameShadow = 8 + 5000 = 5008
-static_assert(kRtcStateRegionBytes + kRtcFrameRegionBytes <= 7680, "RTC slow memory budget");
+// Sizes of the RTC_NOINIT regions (kRtcStateRegionBytes / kRtcFrameRegionBytes) are public
+// constants in qz/platform/idf_platform.hpp so main/ can static_assert them against
+// sizeof(app::RtcState) / sizeof(app::FrameShadow).
 
 /// Byte regions in RTC_NOINIT memory (survive deep sleep and software resets; undefined after
 /// power-on, so the owner validates magic/version/CRC).

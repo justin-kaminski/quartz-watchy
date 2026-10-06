@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 12:05 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 13:05 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -33,7 +33,7 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 
 | Not started | WP-19 self-test + goldens (needs the host golden tool; `selftest` currently answers `unsupported`), WP-22 virtual-time simulation suite, WP-26 console port (esp_console over USB-Serial-JTAG), WP-27 radio (Wi-Fi/SNTP/HTTPS/provisioning portal, IDF-only), WP-28 `main/` wiring (construct platform + App, `BuildFeatures`), WP-29 qzctl + device tests, WP-30 skills/docs/release/power budget, WP-23 rest |
 
 Full gate at 12:05 CDT: `tools/check.sh --fw` = 1348 host tests (ASan+UBSan), tidy, generated-file checks, both firmware variants, offline-symbol check: all green.
-IMPORTANT: the firmware image still has no `main/` wiring (app_main is empty) and no radio/console port: it builds, but a flashed watch would do nothing. Remaining critical path to a first flash: WP-28, WP-26, then WP-27 (radio build) and bring-up.
+FIRST FLASH IS NOW POSSIBLE: `main/` wiring, the USB console port and the platform init exist (image 0.45 MiB, radio off at run time until WP-27, no self-test until WP-19). Follow docs/FIRST_FLASH.md. Nothing has run on hardware.
 
 ## Resume playbook (do this after every usage-window reset)
 1. `get_usage`; proceed only if the 5-hour window is < 50% used.
@@ -43,10 +43,9 @@ IMPORTANT: the firmware image still has no `main/` wiring (app_main is empty) an
    `python3 tools/check_deps.py`, one `tools/fw.sh build` if firmware-linked, read the non-test source, then
    `git add components/qz_<c>` and commit (message: what, tests, "Reviewed: ..."). Other agents' half-written files make
    the repo-wide gate unreliable until they finish.
-4. Next WPs, in order: WP-28 (`main/`: construct IdfPlatform + App, BuildFeatures from Kconfig, static_assert RTC sizes, call
-   release_holds at boot, loop run_wake -> sleep) -> WP-26 (console port) -> WP-22 (virtual-time week suite, the M4 gate) ->
-   WP-19 (selftest + goldens + host golden tool) -> WP-27 (radio; add the positive `nm` check) -> WP-23 rest -> WP-29 -> WP-30.
-   Then an Opus review pass over wake_planner/sleep/app wiring if budget allows. Before the owner flashes: docs/HARDWARE_BRINGUP.md.
+4. Next, after the owner's first-flash report (docs/FIRST_FLASH.md section 6): fix whatever bring-up finds, then WP-22 (virtual-time
+   week suite, the M4 gate) -> WP-19 (selftest + goldens + host golden tool) -> WP-27 (radio; add the positive `nm` check) ->
+   WP-23 rest -> WP-29 -> WP-30; an Opus review pass over wake_planner/sleep/app wiring if budget allows.
 5. Pacing (measured): 4 parallel Sonnet agents burn ~2.7 % of the 5-hour window per minute (the first burst used 96 % in
    35 min and 13 % of the week). Run at most 3 agents, stop launching at ~85 %, and when the window is nearly spent let the
    running agents finish, then END the turn after scheduling the next wake-up with `CronCreate` (one-shot, local time,
@@ -66,6 +65,7 @@ IMPORTANT: the firmware image still has no `main/` wiring (app_main is empty) an
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] main/console (WP-26/28): qz_net is a stub (both factories return nullptr) until WP-27; `IdfI2cDevice` init failure is non-fatal (logged); the git hash is stale until CMake reconfigures; the console log hook truncates at 256 B per line; the init-failure retry sleeps before any state check. [ASSUMED] esptool hard-reset over USB-Serial/JTAG, `idf.py monitor` forwarding typed lines, uninstalling the console driver leaves USB sane, 8 KiB main stack is enough.
 - [TECH-DEBT] App (WP-21): selftest hooks are weak declarations until WP-19; Critical does not suspend the BMA423; `diag sensors` has no raw accel; the provisioning form path (`Core::apply`) is untested (private); BMA423 axis remap is still the default.
 - [TECH-DEBT] Platform (WP-25): EpdBus 3-wire read is unimplemented (`read()` -> kUnsupported; needed for bring-up experiment E1); `CONFIG_QZ_USB_WAKE` must be mapped into `plan.wake_on_usb` by main; `IdfSleep::release_holds()` or `IdfEpdBus::init()` must run at every boot (WP-28).
 - [TECH-DEBT] Platform (WP-25) [ASSUMED] until bring-up: B3 I2C; B4 GPIO0 held on wake boots normally, vibration hold works on the RTC pad, EXT1 holds are released after wake; B5 SPI idle levels in light sleep, reset timing, BUSY wake; B8 multi-stage Unity resume; B9 sleep floor incl. IDF isolating unheld pads.
