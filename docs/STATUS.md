@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 16:20 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 16:00 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -19,6 +19,17 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 
 | M3 face on the watch | needs owner bring-up |
 | M4 a week in 10 s (virtual-time suite) | not started |
 | M5 full feature | not started |
+
+## First hardware run (2026-10-06, offline image, owner's Watchy v3)
+Flashed via USB-Serial/JTAG (download mode reached with the BACK+UP chord; esptool auto-reset caught the chip).
+Quartz boots, enters tethered mode and answers the console. Driver self-test on the real watch: **11 pass, 0 fail,
+1 skip** (panel temperature read, deliberate): display init / full refresh 2070 ms / partial refresh 483 ms (the OTP
+mode-2 waveform exists, P-11 risk reduced; visual quality still to be confirmed), BMA423 chip id 0x13 + config blob
+loaded (P-12 blob works functionally), 32 kHz crystal running (32773 Hz measured), battery ADC 3906-3913 mV on USB,
+buttons idle, USB/charge pins, NVS round trip, heap 283 kB. Time set over the console; framebuffer shows the face.
+Host-side bug found and fixed: opening the port with DTR/RTS forced low resets the ESP32-S3 (qzctl now leaves them alone).
+Still to verify on hardware: what the panel actually looks like (orientation, ghosting, partial-update flicker), buttons
+after deep sleep, sleep current (B9), step counting (B7), behaviour unplugged.
 
 ## Work packages
 | WP | State |

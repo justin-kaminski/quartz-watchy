@@ -93,6 +93,9 @@ USB-Serial/JTAG on this board.
    button wakes it. Plugging USB in wakes it (EXT0) and re-enumerates the port about a second later.
 
 ## 5. USB console
+**Opening the port must not toggle DTR/RTS**: Linux asserts both on open, and dropping DTR before RTS resets the
+ESP32-S3. `tools/qzctl.sh` (e.g. `tools/qzctl.sh run version`, `tools/qzctl.sh screenshot shot.png`) does this right; with
+other terminals make sure they do not drop DTR/RTS on open (miniterm: `--dtr 1 --rts 1`).
 Protocol: `docs/ARCHITECTURE.md` section 16. Lines end with `\n` (CR or CRLF also accepted). Every
 request gets one reply `@QZ1 <id|-> OK {json}` or `@QZ1 <id|-> ERR <code> {json}`; log lines never
 start with `@QZ1`. Optional request id: `#7 status`.

@@ -139,10 +139,11 @@ class SerialTransport(Transport):
                 try:
                     ser = serial.Serial()
                     ser.port, ser.baudrate, ser.timeout = port, self._baud, 0
-                    # Asserting DTR/RTS on USB-Serial-JTAG can reset the chip or enter the
-                    # bootloader [ASSUMED, esptool-style reset lines]; keep both low.
-                    ser.dtr = False
-                    ser.rts = False
+                    # Never touch DTR/RTS. Linux asserts both on open; pyserial then applying
+                    # dtr=False before rts=False passes through "RTS high, DTR low", which the
+                    # ESP32-S3 USB-Serial/JTAG treats as a chip reset (measured on a Watchy v3,
+                    # 2026-10-06: every such open rebooted the watch). Leaving pyserial's
+                    # defaults (both asserted) causes no transition and no reset.
                     ser.open()
                 except (serial.SerialException, OSError) as exc:
                     last_error = exc  # node exists but is not usable yet (udev, still booting)
