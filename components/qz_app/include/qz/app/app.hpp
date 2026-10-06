@@ -11,9 +11,13 @@
 #include "qz/hal/system.hpp"
 #include "qz/model/types.hpp"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace qz::app {
+
+class Core; // private wiring (src/app_core.hpp)
 
 /// Build-time options, filled in main/ from Kconfig (pure code never reads CONFIG_*).
 struct BuildFeatures {
@@ -66,10 +70,16 @@ private:
 class App {
 public:
     App(Platform& platform, const BuildFeatures& features) noexcept;
+    ~App();
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
+    App(App&&) = delete;
+    App& operator=(App&&) = delete;
     /// Runs one complete wake (incl. interactive session) and returns the plan for deep sleep.
     /// In the tethered state it returns only when the device should sleep (USB gone or `sleep`).
     hal::SleepPlan run_wake() noexcept;
-    /// Console + inspection surface (also used by the simulator and integration tests).
+    /// Console + inspection surface (also used by the simulator and integration tests). Valid
+    /// after the first run_wake(); mutating calls commit the RTC state.
     [[nodiscard]] console::DeviceApi& device_api() noexcept;
     [[nodiscard]] const TetherPolicy& tether() const noexcept;
 
@@ -77,7 +87,11 @@ private:
     Platform& platform_;
     BuildFeatures features_;
     TetherPolicy tether_;
-    // Services, UI, registry, RtcState copy: added by the app work package (fixed storage).
+    // Services, UI, registry and the RtcState working copy live in Core, placement-constructed in
+    // fixed storage (no heap). Size checked against sizeof(Core) in app.cpp.
+    static constexpr std::size_t kCoreStorageBytes = 49152;
+    alignas(std::max_align_t) std::array<std::byte, kCoreStorageBytes> core_storage_{};
+    Core* core_ = nullptr;
 };
 
 } // namespace qz::app

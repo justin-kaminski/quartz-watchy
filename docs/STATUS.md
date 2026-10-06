@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 09:20 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 12:05 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -23,16 +23,17 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 
 ## Work packages
 | WP | State |
 |---|---|
-| WP-01 core + base fakes, WP-02 civil time + POSIX-TZ, WP-03 TZ table, WP-04 TimeKeeper | committed |
-| WP-05 gfx + PNG, WP-06 fonts (Spleen), WP-16 faces (default + minimal) | committed |
-| WP-07 SSD1681 driver + panel model, WP-08 BMA423 wrapper + fake | committed |
-| WP-09 settings + KV fake, WP-10 steps, WP-11 power, WP-12 weather, WP-13 connectivity logic | committed |
-| WP-17 console protocol + dispatcher, WP-28 firmware config | committed |
-| WP-23 face-only simulator (milestone M1) | committed (`--press/--scene/--console` need the app) |
-| Not started | WP-14 UI framework, 15 system screens, 18 console catalog, 19 self-test + goldens, 20 app core, 21 app wiring, 22 virtual-time suite, 24-27 platform/radio (IDF-only), 29 qzctl + device tests, 30 skills/docs/release |
+| WP-01 core + fakes, 02 civil time + POSIX-TZ, 03 TZ table, 04 TimeKeeper | committed |
+| WP-05 gfx + PNG, 06 fonts, 14 UI framework, 15 system screens + icons, 16 faces | committed |
+| WP-07 SSD1681 driver + panel model, 08 BMA423 wrapper + fake | committed |
+| WP-09 settings, 10 steps, 11 power, 12 weather, 13 connectivity logic | committed |
+| WP-17 console protocol, 18 console catalog (50 commands), 20 app core (RTC store, tether, wake planner), 21 app wiring + DeviceApi | committed |
+| WP-24 platform HAL basics, 25 platform sleep/EPD bus/I2C (IDF-only, build-verified only), 28 firmware config | committed |
+| WP-23 face-only simulator (milestone M1) | committed (`--press/--scene/--console` still open: the app now exists, so they can be added) |
+| Not started | WP-19 self-test + goldens (needs the host golden tool; `selftest` currently answers `unsupported`), WP-22 virtual-time simulation suite, WP-26 console port (esp_console over USB-Serial-JTAG), WP-27 radio (Wi-Fi/SNTP/HTTPS/provisioning portal, IDF-only), WP-28 `main/` wiring (construct platform + App, `BuildFeatures`), WP-29 qzctl + device tests, WP-30 skills/docs/release/power budget, WP-23 rest |
 
-Full gate at 09:20 CDT: `tools/check.sh --fw` = 1067 host tests (ASan+UBSan), tidy, both firmware variants, offline-symbol check: all green.
-Milestone M1 (host face) is done: `build/host/sim/qz_sim --face default --time ... --out face.png` (see host/sim/main.cpp).
+Full gate at 12:05 CDT: `tools/check.sh --fw` = 1348 host tests (ASan+UBSan), tidy, generated-file checks, both firmware variants, offline-symbol check: all green.
+IMPORTANT: the firmware image still has no `main/` wiring (app_main is empty) and no radio/console port: it builds, but a flashed watch would do nothing. Remaining critical path to a first flash: WP-28, WP-26, then WP-27 (radio build) and bring-up.
 
 ## Resume playbook (do this after every usage-window reset)
 1. `get_usage`; proceed only if the 5-hour window is < 50% used.
@@ -42,10 +43,10 @@ Milestone M1 (host face) is done: `build/host/sim/qz_sim --face default --time .
    `python3 tools/check_deps.py`, one `tools/fw.sh build` if firmware-linked, read the non-test source, then
    `git add components/qz_<c>` and commit (message: what, tests, "Reviewed: ..."). Other agents' half-written files make
    the repo-wide gate unreliable until they finish.
-4. Next WPs, in order: WP-14 (UI framework) -> WP-15 (system screens) and WP-18 (console catalog, needs 17+09)
-   -> WP-20 (app core: RTC state, tether, wake planner) -> WP-21 (app wiring + DeviceApi) -> WP-22 (virtual-time suite)
-   -> WP-19 (selftest/goldens) -> WP-23 rest (--press/--scene/--console); platform in parallel: WP-24, 25 (opus review),
-   26, 27, then WP-29/30. Reviews: read the non-test source of critical modules (wake planner, sleep/GPIO, app wiring).
+4. Next WPs, in order: WP-28 (`main/`: construct IdfPlatform + App, BuildFeatures from Kconfig, static_assert RTC sizes, call
+   release_holds at boot, loop run_wake -> sleep) -> WP-26 (console port) -> WP-22 (virtual-time week suite, the M4 gate) ->
+   WP-19 (selftest + goldens + host golden tool) -> WP-27 (radio; add the positive `nm` check) -> WP-23 rest -> WP-29 -> WP-30.
+   Then an Opus review pass over wake_planner/sleep/app wiring if budget allows. Before the owner flashes: docs/HARDWARE_BRINGUP.md.
 5. Pacing (measured): 4 parallel Sonnet agents burn ~2.7 % of the 5-hour window per minute (the first burst used 96 % in
    35 min and 13 % of the week). Run at most 3 agents, stop launching at ~85 %, and when the window is nearly spent let the
    running agents finish, then END the turn after scheduling the next wake-up with `CronCreate` (one-shot, local time,
@@ -65,6 +66,7 @@ Milestone M1 (host face) is done: `build/host/sim/qz_sim --face default --time .
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] App (WP-21): selftest hooks are weak declarations until WP-19; Critical does not suspend the BMA423; `diag sensors` has no raw accel; the provisioning form path (`Core::apply`) is untested (private); BMA423 axis remap is still the default.
 - [TECH-DEBT] Platform (WP-25): EpdBus 3-wire read is unimplemented (`read()` -> kUnsupported; needed for bring-up experiment E1); `CONFIG_QZ_USB_WAKE` must be mapped into `plan.wake_on_usb` by main; `IdfSleep::release_holds()` or `IdfEpdBus::init()` must run at every boot (WP-28).
 - [TECH-DEBT] Platform (WP-25) [ASSUMED] until bring-up: B3 I2C; B4 GPIO0 held on wake boots normally, vibration hold works on the RTC pad, EXT1 holds are released after wake; B5 SPI idle levels in light sleep, reset timing, BUSY wake; B8 multi-stage Unity resume; B9 sleep floor incl. IDF isolating unheld pads.
 - [TECH-DEBT] System screens (WP-15): Diagnostics "Sensors" page shows only what `WatchState` carries (no raw accel/temperature); `recent_wakes` order assumed oldest-first and the provisioning URL assumed `http://192.168.4.1` [ASSUMED]; screen sources live in `qz_ui/src/` (CMake glob is non-recursive).
