@@ -49,7 +49,7 @@ Layer numbers: 0 foundation, 1 HAL/board, 2 drivers + pure libraries, 3 services
 | `qz_weather` | pure | 3 | Weather provider interface, Open-Meteo request builder + response parser, WMO-code mapping, freshness/stale rules | core, hal, time, model | cJSON (`espressif/cjson` on IDF, pinned FetchContent on host) |
 | `qz_conn` | pure | 3 | Connectivity state machine: mode policy, sync scheduling, exponential backoff, hard time budgets, sync-session orchestration (Wi-Fi -> SNTP -> weather -> teardown), provisioning session logic | core, hal, time, model, weather | — |
 | `qz_ui` | pure | 4 | UI framework + system screens: input gesture recognizer, screen stack/navigation, menu model, settings editors, icons, `WatchState` snapshot and UI actions | core, gfx, time, model, settings | — |
-| `qz_faces` | pure | 4 | Watch faces and the explicit face registry table | core, gfx, model, ui | — |
+| `qz_faces` | pure | 4 | Watch faces and the explicit face registry table | core, gfx, model, ui, time | — |
 | `qz_console` | pure | 4 | Command registry, line protocol v1 (sentinel + JSON), arg parsing, JSON writer, full command catalog bound to the `console::DeviceApi` interface | core, model, settings, time | — |
 | `qz_selftest` | pure | 4 | Self-test framework (registry/runner/report), canonical UI scenes (fixtures), golden CRC table, driver/settings/screen checks written against HAL + drivers | core, hal, time, model, gfx, ui, faces, settings, ssd1681, bma423, power | — |
 | `qz_app` | pure | 5 | Wake dispatcher, RTC state block (magic/version/CRC), wake-record ring, tether policy, sleep planner, service wiring, `DeviceApi` implementation, snapshot builder, action executor | all pure except testkit | — |
@@ -142,3 +142,4 @@ tool, verified in CI).
   edge found by `tools/check_deps.py`: `qz_ssd1681` includes `qz/gfx/framebuffer.hpp` (the panel API
   takes a `gfx::Framebuffer`) -> add **qz_gfx** to `qz_ssd1681` deps. gfx depends only on core, so
   there is no cycle. Table rows now carry the dependencies; this log is history.
+- 2026-10-06 (lead): `qz_faces` includes `qz/time/` (calendar helpers for the date line) -> add **qz_time** to `qz_faces` deps. time depends only on core/hal, so there is no cycle.
