@@ -1,46 +1,12 @@
-// WP-14 stand-in for the system screens that WP-15 draws (see screen.hpp). The input behaviour
-// below is part of the navigation graph (ARCHITECTURE.md section 15) and stays when WP-15 swaps
-// render() for the real pages.
+// System screens: input behaviour (the navigation graph, ARCHITECTURE.md section 15) lives here;
+// drawing is in system_screens.cpp (WP-15).
 #include "screen.hpp"
+#include "system_screens.hpp"
 
 namespace qz::ui {
 namespace {
 
 using model::Button;
-
-std::string_view title_of(ScreenId id) noexcept {
-    switch (id) {
-        case ScreenId::kStepsHistory:
-            return "Steps";
-        case ScreenId::kWeatherDetail:
-            return "Weather";
-        case ScreenId::kSyncNow:
-            return "Sync now";
-        case ScreenId::kProvisioning:
-            return "Wi-Fi setup";
-        case ScreenId::kDiagnostics:
-            return "Diagnostics";
-        case ScreenId::kAbout:
-            return "About";
-        case ScreenId::kFactoryReset:
-            return "Factory reset";
-        case ScreenId::kChargeMe:
-            return "Charge me";
-        case ScreenId::kStatusOverlay:
-            return "Status";
-        case ScreenId::kFace:
-        case ScreenId::kMenu:
-        case ScreenId::kTimeDateEditor:
-        case ScreenId::kTimezonePicker:
-        case ScreenId::kChoice:
-        case ScreenId::kWeatherSettings:
-        case ScreenId::kLocationEditor:
-        case ScreenId::kStepGoalEditor:
-        case ScreenId::kCount:
-            break;
-    }
-    return {};
-}
 
 } // namespace
 
@@ -48,13 +14,8 @@ void SystemScreen::enter(const WatchState& /*state*/, std::uint8_t /*param*/) no
     page_ = 0;
 }
 
-void SystemScreen::render(const WatchState& /*state*/, gfx::Canvas& canvas) const noexcept {
-    draw_title_bar(canvas, title_of(id_));
-    if (id_ == ScreenId::kDiagnostics) {
-        TextBuilder<16> p;
-        p.put("page ").put_uint(page_ + 1U).put("/").put_uint(tuning::kDiagPageCount);
-        draw_caption(canvas, 100, p.view());
-    }
+void SystemScreen::render(const WatchState& state, gfx::Canvas& canvas) const noexcept {
+    render_system_screen(id_, page_, state, canvas);
 }
 
 Outcome SystemScreen::handle(const model::InputEvent& event, const WatchState& state) noexcept {
