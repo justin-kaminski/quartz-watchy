@@ -1,0 +1,9 @@
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_FREERTOS_HZ=1000
+# Same sleep-relevant settings as the product (docs/SDKCONFIG.md): 32.768 kHz crystal timekeeping and
+# no IDF-added pulls on wake pins (the buttons have external pull-ups).
+CONFIG_RTC_CLK_SRC_EXT_CRYS=y
+CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS=n
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y

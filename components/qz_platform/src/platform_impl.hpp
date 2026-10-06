@@ -3,6 +3,8 @@
 // headers on purpose and must never be exposed through the component's public include dir.
 #pragma once
 
+#include "driver/i2c_master.h"
+#include "driver/spi_master.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
@@ -11,6 +13,8 @@
 #include "qz/core/result.hpp"
 #include "qz/hal/board_io.hpp"
 #include "qz/hal/delay.hpp"
+#include "qz/hal/epd_bus.hpp"
+#include "qz/hal/i2c.hpp"
 #include "qz/hal/kv_store.hpp"
 #include "qz/hal/system.hpp"
 
@@ -154,6 +158,111 @@ public:
 private:
     bool inited_ = false;
     bool erased_ = false;
+};
+
+// ---- WP-25: sleep/wake and buses ----------------------------------------------------------------
+
+/// Deep/light sleep control (ARCHITECTURE.md section 5). Single instance, app task only.
+class IdfSleep final : public hal::SleepControl {
+public:
+    /// Shortest timer wake accepted by deep sleep (shorter requests are raised to this value) so
+    /// esp_deep_sleep_try_to_start never rejects a plan for a timer that already elapsed.
+    static constexpr std::int64_t kMinDeepSleepTimerUs = 2000;
+    /// Light sleeps shorter than this are polled instead (sleep entry/exit overhead dominates).
+    static constexpr std::int64_t kMinLightSleepUs = 3000;
+
+    explicit IdfSleep(hal::BoardIo& io) noexcept : io_(io) {}
+    IdfSleep(const IdfSleep&) = delete;
+    IdfSleep& operator=(const IdfSleep&) = delete;
+
+    /// Tethered (USB powered, console up): light_sleep() polls instead of entering light sleep so
+    /// the USB-Serial-JTAG link stays up.
+    void set_tethered(bool tethered) noexcept { tethered_ = tethered; }
+    [[nodiscard]] bool tethered() const noexcept { return tethered_; }
+
+    /// Arms the wake sources of `plan`, parks the pins per ARCHITECTURE.md section 5 and enters
+    /// deep sleep. Does not return unless the IDF rejects the sleep request, in which case all
+    /// holds are released and the chip restarts (esp_restart).
+    void deep_sleep(const hal::SleepPlan& plan) override;
+    hal::LightSleepWake light_sleep(const hal::SleepPlan& plan) override;
+
+    /// Undoes everything deep_sleep() latched: drives the parked outputs to their parked level
+    /// first, then drops the per-pad holds and the deep-sleep autohold flag, and returns the
+    /// battery pad to the analog state. Idempotent; call once at boot BEFORE the SPI bus or any
+    /// output driver is initialized (it reconfigures GPIO17/33/34/35/47/48 as plain outputs).
+    static Status release_holds() noexcept;
+
+private:
+    hal::BoardIo& io_;
+    bool tethered_ = false;
+    bool outputs_kept_in_light_sleep_ = false;
+};
+
+/// SSD1681 bus: SPI2 master (write only, mode 0, board::kSpiHz), DC/CS/RST/BUSY handling.
+/// CS is the SPI peripheral's hardware CS; DC is a plain GPIO set before each transfer.
+class IdfEpdBus final : public hal::EpdBus {
+public:
+    /// Reset timing [ASSUMED] generous (ssd1681.md s2): RES# low >= 10 ms, wait >= 10 ms after.
+    static constexpr std::uint32_t kResetLowMs = 10;
+    static constexpr std::uint32_t kResetHighMs = 10;
+    /// SPI bounce buffer (internal DMA-capable RAM). Frames are sent in chunks of this size under
+    /// one CS frame.
+    static constexpr std::size_t kChunkBytes = 1000;
+
+    IdfEpdBus(hal::SleepControl& sleep, hal::Delay& delay) noexcept
+        : sleep_(sleep), delay_(delay) {}
+    IdfEpdBus(const IdfEpdBus&) = delete;
+    IdfEpdBus& operator=(const IdfEpdBus&) = delete;
+    ~IdfEpdBus() override;
+
+    /// Releases deep-sleep pad holds (IdfSleep::release_holds), sets RST/DC idle levels, configures
+    /// BUSY as a plain input (no pull) and brings up SPI2 + the display device. Call once.
+    Status init() noexcept;
+
+    Status hardware_reset() override;
+    Status command(std::uint8_t cmd) override;
+    Status data(std::span<const std::uint8_t> bytes) override;
+    /// Always kUnsupported: the board has no MISO; the 3-wire read turnaround is not implemented
+    /// ([TECH-DEBT] in docs/STATUS.md, needed only for bring-up E1).
+    Status read(std::span<std::uint8_t> out) override;
+    [[nodiscard]] bool busy() const override;
+    Status wait_idle(std::uint32_t timeout_ms) override;
+
+private:
+    Status transfer(bool dc_high, std::span<const std::uint8_t> bytes);
+
+    hal::SleepControl& sleep_;
+    hal::Delay& delay_;
+    spi_device_handle_t dev_ = nullptr;
+    bool bus_ready_ = false;
+};
+
+/// BMA423 register access over the `i2c_master` driver (400 kHz, external pull-ups).
+class IdfI2cDevice final : public hal::I2cDevice {
+public:
+    /// Longest payload accepted by write_registers (the BMA423 config blob is written in 64-byte
+    /// chunks, STATUS.md WP-08 tech debt); the register byte is sent in its own buffer.
+    static constexpr std::size_t kMaxWriteBytes = 256;
+    /// Per-transaction timeout. A 65-byte write is ~1.6 ms at 400 kHz [TUNE].
+    static constexpr int kXferTimeoutMs = 50;
+
+    IdfI2cDevice() noexcept = default;
+    IdfI2cDevice(const IdfI2cDevice&) = delete;
+    IdfI2cDevice& operator=(const IdfI2cDevice&) = delete;
+    ~IdfI2cDevice() override;
+
+    /// Creates the bus (board::kI2cSda/kI2cScl, no internal pull-ups) and adds the device at
+    /// board::kBma423Address, board::kI2cHz. Call once.
+    Status init() noexcept;
+
+    Status read_registers(std::uint8_t reg, std::span<std::uint8_t> out) override;
+    Status write_registers(std::uint8_t reg, std::span<const std::uint8_t> data) override;
+
+private:
+    [[nodiscard]] Status finish(esp_err_t err) noexcept;
+
+    i2c_master_bus_handle_t bus_ = nullptr;
+    i2c_master_dev_handle_t dev_ = nullptr;
 };
 
 } // namespace qz::platform
