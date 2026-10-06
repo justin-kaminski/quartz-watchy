@@ -1,6 +1,6 @@
 # Status
 
-Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 13:05 CDT.
+Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 14:50 CDT.
 
 ## Blockers needing the owner
 | # | Item | Detail |
@@ -30,10 +30,11 @@ Maintained by the lead. Read this first when resuming. Last updated: 2026-10-06 
 | WP-17 console protocol, 18 console catalog (50 commands), 20 app core (RTC store, tether, wake planner), 21 app wiring + DeviceApi | committed |
 | WP-24 platform HAL basics, 25 platform sleep/EPD bus/I2C (IDF-only, build-verified only), 28 firmware config | committed |
 | WP-23 face-only simulator (milestone M1) | committed (`--press/--scene/--console` still open: the app now exists, so they can be added) |
-| Not started | WP-19 self-test + goldens (needs the host golden tool; `selftest` currently answers `unsupported`), WP-22 virtual-time simulation suite, WP-26 console port (esp_console over USB-Serial-JTAG), WP-27 radio (Wi-Fi/SNTP/HTTPS/provisioning portal, IDF-only), WP-28 `main/` wiring (construct platform + App, `BuildFeatures`), WP-29 qzctl + device tests, WP-30 skills/docs/release/power budget, WP-23 rest |
+| WP-19 selftest + 61 goldens, WP-22 virtual-time week suite (18 scenarios), WP-27 radio (Wi-Fi/SNTP/HTTPS/provisioning portal) | committed |
+| Not started | WP-23 rest (`--press/--scene/--console` in the simulator), WP-29 qzctl + on-device test automation, WP-30 skills/docs/release/power budget, an Opus review pass over wake_planner/sleep/app wiring/radio; then whatever the first hardware flash finds |
 
 Full gate at 12:05 CDT: `tools/check.sh --fw` = 1348 host tests (ASan+UBSan), tidy, generated-file checks, both firmware variants, offline-symbol check: all green.
-FIRST FLASH IS NOW POSSIBLE: `main/` wiring, the USB console port and the platform init exist (image 0.45 MiB, radio off at run time until WP-27, no self-test until WP-19). Follow docs/FIRST_FLASH.md. Nothing has run on hardware.
+FIRST FLASH IS NOW POSSIBLE: `main/` wiring, the USB console port and the platform init exist (radio image 1.18 MiB with the radio now implemented but never run; the first-flash guide still describes the radio-off behaviour of the earlier image: re-read docs/FIRST_FLASH.md before flashing the radio variant). Follow docs/FIRST_FLASH.md. Nothing has run on hardware.
 
 ## Resume playbook (do this after every usage-window reset)
 1. `get_usage`; proceed only if the 5-hour window is < 50% used.
@@ -65,6 +66,9 @@ FIRST FLASH IS NOW POSSIBLE: `main/` wiring, the USB console port and the platfo
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] Virtual-time suite (WP-22): a FRESH device writes 15 NVS entries in its first week (2 per local midnight x 7 + the one-time step-store schema key; the "Off" scenario pre-seeds that key and measures 14, the budget). Wake-ahead assumes the partial waveform, so the periodic FULL refresh (every 31st minute) completes up to ~1.9 s after the true minute (partials stay < 0.7 s): start full refreshes earlier or accept. Changing the time zone after the time is set does not re-derive the step day until the next rollover. The 7-day scenarios take ~7.3 s each at -O0+ASan (target 5 s): add -O1 for the sim test target.
+- [TECH-DEBT] Radio (WP-27): worst-case HTTPS open can exceed `timeout_ms` (DNS unbounded); static DRAM headroom is only ~3.7 KiB of the 96 KiB budget (radio image 92.4 KiB); heap teardown is unproven until `test_apps/net` is run; stop-event order, RSSI threshold are [ASSUMED].
+- [TECH-DEBT] Self-test (WP-19): battery divider constants mirrored in selftest tuning (use qz_board once allowed); step-counter test checks only that the engine is loaded (counting is bring-up B7); tz-picker goldens depend on the tz table (a tzdata bump needs `qz_golden --update`).
 - [TECH-DEBT] main/console (WP-26/28): qz_net is a stub (both factories return nullptr) until WP-27; `IdfI2cDevice` init failure is non-fatal (logged); the git hash is stale until CMake reconfigures; the console log hook truncates at 256 B per line; the init-failure retry sleeps before any state check. [ASSUMED] esptool hard-reset over USB-Serial/JTAG, `idf.py monitor` forwarding typed lines, uninstalling the console driver leaves USB sane, 8 KiB main stack is enough.
 - [TECH-DEBT] App (WP-21): selftest hooks are weak declarations until WP-19; Critical does not suspend the BMA423; `diag sensors` has no raw accel; the provisioning form path (`Core::apply`) is untested (private); BMA423 axis remap is still the default.
 - [TECH-DEBT] Platform (WP-25): EpdBus 3-wire read is unimplemented (`read()` -> kUnsupported; needed for bring-up experiment E1); `CONFIG_QZ_USB_WAKE` must be mapped into `plan.wake_on_usb` by main; `IdfSleep::release_holds()` or `IdfEpdBus::init()` must run at every boot (WP-28).
