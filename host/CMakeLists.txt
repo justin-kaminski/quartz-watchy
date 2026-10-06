@@ -18,7 +18,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(QZ_SANITIZE)
-  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+  # vptr is off: Quartz libraries are built -fno-rtti (their vtables carry no typeinfo) while
+  # GoogleTest and the test sources use RTTI, and UBSan's vptr check cannot work across that
+  # boundary (undefined `typeinfo for <Fake>` at link time, "invalid vptr" at run time).
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize=vptr -fno-sanitize-recover=undefined
+                      -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address,undefined)
 endif()
 if(QZ_COVERAGE)
@@ -38,8 +42,24 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 include(GoogleTest)
 
-# --- cJSON (host side of the cjson dependency; same upstream version as espressif/cjson) -----
-# Added by the weather work package (FetchContent, pinned URL + hash) -> target `cjson`.
+# --- cJSON (host side of the cjson dependency; v1.7.19, same upstream version as the device's
+# espressif/cjson ==1.7.19~2 managed component). Pinned to an immutable commit. -> target `cjson`
+set(ENABLE_CJSON_TEST OFF CACHE BOOL "" FORCE)
+set(ENABLE_CJSON_UNINSTALL OFF CACHE BOOL "" FORCE)
+set(ENABLE_CUSTOM_COMPILER_FLAGS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ENABLE_TARGET_EXPORT OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(cjson
+  GIT_REPOSITORY https://github.com/DaveGamble/cJSON.git
+  GIT_TAG c859b25da02955fef659d658b8f324b5cde87be3)
+# cJSON still declares cmake_minimum_required(3.0), which CMake 4 rejects without this floor.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+FetchContent_MakeAvailable(cjson)
+unset(CMAKE_POLICY_VERSION_MINIMUM)
+if(NOT TARGET cjson)
+  message(FATAL_ERROR "cJSON did not define the 'cjson' target")
+endif()
+target_include_directories(cjson PUBLIC ${cjson_SOURCE_DIR})
 
 # --- Components ---------------------------------------------------------------------------------
 function(qz_host_component_tests name)
@@ -63,6 +83,28 @@ endforeach()
 foreach(_c IN LISTS QZ_HOST_COMPONENTS)
   qz_host_component_tests(${_c})
 endforeach()
+
+# --- Header self-containment: every public header must compile on its own, under the strict flags
+file(GLOB_RECURSE _qz_public_headers CONFIGURE_DEPENDS "${QZ_ROOT}/components/*/include/*.hpp")
+set(_qz_header_check_srcs "")
+foreach(_h IN LISTS _qz_public_headers)
+  cmake_path(RELATIVE_PATH _h BASE_DIRECTORY ${QZ_ROOT}/components OUTPUT_VARIABLE _rel)
+  string(REGEX REPLACE "[^A-Za-z0-9]" "_" _id "${_rel}")
+  set(_src "${CMAKE_BINARY_DIR}/header_check/${_id}.cpp")
+  string(REGEX REPLACE "^[^/]+/include/" "" _inc "${_rel}")
+  # Only headers of pure (host-built) components are checked here.
+  string(REGEX MATCH "^[^/]+" _comp "${_rel}")
+  if(_comp IN_LIST QZ_HOST_COMPONENTS)
+    file(GENERATE OUTPUT "${_src}" CONTENT "#include <${_inc}>\n")
+    list(APPEND _qz_header_check_srcs "${_src}")
+  endif()
+endforeach()
+if(_qz_header_check_srcs)
+  add_library(qz_header_check OBJECT ${_qz_header_check_srcs})
+  target_link_libraries(qz_header_check PRIVATE ${QZ_HOST_COMPONENTS})
+  target_compile_features(qz_header_check PRIVATE cxx_std_${QZ_CXX_STANDARD})
+  target_compile_options(qz_header_check PRIVATE ${QZ_WARNING_FLAGS} ${QZ_CXX_ONLY_FLAGS})
+endif()
 
 # Simulator and host-only tools (added by the UI/simulator work package).
 if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/sim/CMakeLists.txt)

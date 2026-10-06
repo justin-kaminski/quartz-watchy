@@ -2,6 +2,7 @@
 /.toolchain/
 /build/
 /build-*/
+host/build/
 /.venv/
 /.cache/
 __pycache__/

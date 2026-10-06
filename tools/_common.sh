@@ -14,5 +14,6 @@ qz_cxx_files() {
       '*.cpp' '*.hpp' '*.h' '*.cc' \
     | grep -vE '(^|/)(third_party|managed_components|build[^/]*)/' \
     | grep -vE '(^|/)generated/' \
-    | sort -u)
+    | sort -u \
+    | while IFS= read -r f; do [ -e "${QZ_ROOT}/${f}" ] && printf '%s\n' "${f}"; done)
 }

@@ -3,8 +3,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 cd "${QZ_ROOT}"
-db="${QZ_ROOT}/build/host"
-[ -f "${db}/compile_commands.json" ] || tools/host.sh configure >/dev/null
+db="${QZ_BUILD_DIR:-${QZ_ROOT}/build/host}"
+case "${db}" in /*) ;; *) db="${QZ_ROOT}/${db}" ;; esac   # relative -> repo root
+[ -f "${db}/compile_commands.json" ] || QZ_BUILD_DIR="${db}" tools/host.sh configure >/dev/null
 if [ "$#" -gt 0 ]; then
   files=("$@")
 else
