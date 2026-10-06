@@ -9,6 +9,7 @@ fast=0; fw=0
 for a in "$@"; do case "$a" in --fast) fast=1;; --fw) fw=1;; *) echo "unknown flag $a" >&2; exit 2;; esac; done
 cd "${QZ_ROOT}"
 echo "== component contract =="; tools/check_deps.py
+echo "== generated fonts are current =="; python3 tools/fontgen.py --check
 echo "== format =="; tools/format.sh --check
 echo "== host build + tests =="; tools/host.sh all
 if [ "${fast}" -eq 0 ]; then echo "== clang-tidy =="; tools/tidy.sh; fi
