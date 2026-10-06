@@ -5,3 +5,5 @@
 # Golden images are reviewed visually, never line-diffed.
 test/golden/**/*.png binary -diff
 components/**/golden/**/*.png binary -diff
+# Vendored third-party code must stay byte-identical to upstream (provenance hashes).
+components/*/third_party/** -text
