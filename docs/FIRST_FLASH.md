@@ -8,8 +8,12 @@ report back. Read "Honest warnings" before you flash. This is the short path thr
 
 What this image does: boots, draws the face (`--:--` and a "set time" hint until you set the time),
 sleeps, wakes every minute, handles the four buttons, and runs the USB console while USB is
-attached. It has **no radio** yet (WP-27 is not implemented): no Wi-Fi, no time sync, no weather.
-Both firmware variants behave the same today; use the default one.
+attached. The radio stack (Wi-Fi, SNTP time sync, weather, provisioning page) is now implemented in the default
+(radio) image but has never run either. **For the very first bring-up flash the OFFLINE image**, which has no
+Wi-Fi code at all and isolates display/sleep/button/USB problems from radio problems:
+`QZ_FW_VARIANT=offline tools/fw.sh build` (output in `build/fw-offline`) and flash it with
+`QZ_FW_VARIANT=offline tools/fw.sh -p $P flash monitor`. Move to the radio image (default `tools/fw.sh build`)
+once the offline one behaves; set Wi-Fi up through the USB console (`wifi set ...`) or the SoftAP page.
 
 ## 0. You need
 - Watchy v3 with its battery connected, and a micro-USB **data** cable (a charge-only cable powers
@@ -22,7 +26,8 @@ Both firmware variants behave the same today; use the default one.
 
 ## 1. Build
 ```bash
-tools/fw.sh build            # radio variant (radio is off at run time until WP-27)
+QZ_FW_VARIANT=offline tools/fw.sh build   # first bring-up image: no radio code (recommended first)
+tools/fw.sh build                         # radio image (Wi-Fi/SNTP/weather/portal, never run on hardware)
 ```
 Expect "Project build complete" and `quartz.bin binary size 0x74ed0` (about 0.45 MiB of the 3 MiB
 slot). The git hash shown on the About screen and in the console `ready` event is taken when CMake
@@ -158,7 +163,8 @@ Please send: the monitor text from boot to `ready`, the JSON of `version`, `stat
   crystal start-up, battery calibration thresholds (`[TUNE]`) and the USB-Serial/JTAG console path
   (driver install/uninstall, log routing, no-host behaviour) were written from the IDF source and
   datasheets, not run.
-- **R5:** this image has no radio and no self-test; weather, sync and the provisioning page do not
-  exist yet. The idle timeouts, the tether timing and the wake budgets are unmeasured.
+- **R5:** the radio image's Wi-Fi/SNTP/HTTPS/portal code and its heap teardown have never run (use
+  `test_apps/net` after the offline image works); the `selftest` command exists but nothing was run on
+  hardware. The idle timeouts, the tether timing and the wake budgets are unmeasured.
 - Power: the deep-sleep floor is a model (25-40 uA), not a measurement. Do not judge battery life
   from this image; `docs/HARDWARE_BRINGUP.md` B9 does that properly.
