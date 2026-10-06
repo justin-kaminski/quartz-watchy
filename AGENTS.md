@@ -46,6 +46,18 @@ Parallel agents must use private build directories: `QZ_BUILD_DIR=build/<name> t
 `QZ_FW_BUILD_DIR=build/<name>-fw tools/fw.sh build`. Run only the tests of your component while
 iterating: `QZ_BUILD_DIR=build/<name> tools/host.sh build && build/<name>/qz_<c>_test`.
 
+## Working efficiently (agents)
+The owner's usage budget is limited; cost scales with tool calls x context size.
+- Target <= 60 tool calls per work package. Stop and report precisely if one problem eats > 10 calls.
+- Read only what you need: ARCHITECTURE section 2 + the sections your WP cites (`grep -n '^## ' docs/ARCHITECTURE.md`,
+  then `sed -n 'a,bp'`), your headers, your WP text. Never `cat` whole docs, logs or build output.
+- Write whole files in one call, several files per call; never re-read a file you just wrote.
+- Iterate with ONE combined command: format -> build only your test target -> run your tests ->
+  tidy on your files, e.g.
+  `tools/format.sh >/dev/null; QZ_BUILD_DIR=build/wpNN tools/host.sh configure >/dev/null && cmake --build build/wpNN --target qz_<c>_test 2>&1 | tail -30 && build/wpNN/qz_<c>_test 2>&1 | tail -15`
+  (building only your target keeps other agents' half-written files out of your build).
+- Run the full gate (`tools/check.sh --fast`, plus `tools/fw.sh build` if firmware-linked code changed) once at the end.
+
 ## Conventions (summary of ARCHITECTURE section 2)
 C++23, no exceptions/RTTI, `qz::Status`/`qz::Result<T>`, no heap on the wake path, integer-only
 rendering, `PascalCase` types, `snake_case` functions, `snake_case_` members, `kPascalCase`
