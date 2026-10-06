@@ -65,6 +65,9 @@ Milestone M1 (host face) is done: `build/host/sim/qz_sim --face default --time .
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] UI (WP-14): optional click vibration (15 ms) not implemented (needs a decision on the `vibration` setting; an extra action would break the one-action-per-save rule); add a UI-level zero-allocation test in the sim.
+- [TECH-DEBT] UI (WP-14): idle timeouts for Provisioning (5 min), SyncNow (60 s), ChargeMe (2 s) and the 3 s MENU hold for FactoryReset are [ASSUMED]; no menu row opens the sync-interval choice yet.
+- [TECH-DEBT] Console (WP-18): WP-21 must override DeviceApi::screen_count/screen_name_at/wifi_has_password.
 - [TECH-DEBT] TZ table (WP-03): 139 entries = ~9 KB (the 6 KiB goal is unreachable with `TzEntry`; ceiling is now 10 KiB). POSIX footers only apply after a zone's last tabulated transition, so Casablanca (until 2026-09-20) and Edmonton/Vancouver/Winnipeg (until 2026-11-01) are WRONG until then, and Gaza's Ramadan shifts are ignored; Chicago/Berlin/Sydney-style zones are unaffected. Consider flagging these in the zone picker.
 - [TECH-DEBT] SSD1681: outside 0-50 C the controller refuses an update but BUSY still falls; the app must gate on `temperature_dc()` (WP-07).
 - [TECH-DEBT] SSD1681: 0x1B/0x2D read framing (no dummy byte) is [ASSUMED]; platform must set 10 MHz SPI and the reset timing (WP-25) (WP-07).

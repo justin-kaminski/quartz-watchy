@@ -9,6 +9,7 @@
 #include "qz/settings/settings.hpp"
 #include "qz/time/civil.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -129,8 +130,15 @@ struct GestureTiming {
     std::uint32_t debounce_ms = 25;
     std::uint32_t hold_ms = 700;
     std::uint32_t repeat_ms = 150;
+    /// MENU only: one extra kRepeat (held_ms == long_hold_ms) when MENU stays down this long.
+    /// Used by the FactoryReset confirmation ("Hold MENU 3 s"); other screens ignore it.
+    std::uint32_t long_hold_ms = 3000;
 };
 
+/// Click: released before hold_ms. Hold: still down at hold_ms. Repeat: every repeat_ms after
+/// Hold for UP/DOWN (plus the single MENU long-hold event). Events carry nominal times, so the
+/// result does not depend on how late the caller samples. BACK+UP down together is never
+/// interpreted (hardware reset chord, section 5). Not thread-safe.
 class GestureRecognizer {
 public:
     explicit GestureRecognizer(GestureTiming timing = {}) noexcept;
@@ -145,21 +153,51 @@ public:
     [[nodiscard]] bool any_pressed() const noexcept;
 
 private:
+    void emit_timed(std::size_t index,
+                    std::int64_t end_us,
+                    StaticVector<model::InputEvent, 8>& out) noexcept;
+
     GestureTiming timing_;
     std::array<std::int64_t, model::kButtonCount> pressed_since_{};
     std::array<std::int64_t, model::kButtonCount> last_emit_{};
-    std::uint8_t state_ = 0;
+    std::array<std::int64_t, model::kButtonCount> raw_since_{}; ///< last raw level change
+    std::uint8_t raw_ = 0;                                      ///< last sampled (undebounced)
+    std::uint8_t state_ = 0;                                    ///< debounced pressed mask
     std::uint8_t hold_sent_ = 0;
+    std::uint8_t long_sent_ = 0;
+    std::uint8_t suppressed_ = 0; ///< buttons inside the BACK+UP chord: no events until released
+};
+
+/// Choice-list screens (ScreenId::kChoice) are parameterised by what they edit.
+enum class ChoiceKind : std::uint8_t {
+    kHourFormat = 0,
+    kUnits,
+    kConnectivity,
+    kVibration,
+    kFace,
+    kSyncInterval,
+    kWeatherInterval,
+    kCount
 };
 
 /// Screen stack + navigation + all system screens. Fixed storage, no heap. Not thread-safe.
+/// Not copyable or movable (the screens live inside the object).
 class Ui {
 public:
     explicit Ui(const FaceSource& faces) noexcept;
+    ~Ui();
+    Ui(const Ui&) = delete;
+    Ui& operator=(const Ui&) = delete;
+    Ui(Ui&&) = delete;
+    Ui& operator=(Ui&&) = delete;
+
     void reset_to_face() noexcept; ///< after deep sleep
     [[nodiscard]] ScreenId current() const noexcept;
-    /// Console/scenes: jump to a screen (editors start from current settings).
+    /// Console/scenes: jump to a screen (editors start from current settings). The stack is
+    /// rebuilt as the user would have reached it (so BACK returns to the parent menu). Emits no
+    /// actions. kChoice shows ChoiceKind::kHourFormat; use show_choice() for the others.
     Status show(ScreenId id, const WatchState& state) noexcept;
+    Status show_choice(ChoiceKind kind, const WatchState& state) noexcept;
     /// One input event -> actions for the app. Navigation happens inside.
     ActionList handle(const model::InputEvent& event, const WatchState& state) noexcept;
     /// Draws the current screen into the canvas (clears first).
@@ -168,12 +206,17 @@ public:
     [[nodiscard]] RefreshHint refresh_hint() const noexcept;
     void clear_refresh_hint() noexcept;
     /// Menus time out after 30 s without input; the face after 2 s (interactive session end).
+    /// Other screens: see src/tuning.hpp (overlay 5 s, SyncNow 60 s, Provisioning 5 min).
     [[nodiscard]] bool idle_expired(std::int64_t now_rtc_us,
                                     std::int64_t last_input_rtc_us) const noexcept;
+    /// Idle timeout of the current screen in microseconds.
+    [[nodiscard]] std::int64_t idle_timeout_us() const noexcept;
 
 private:
-    const FaceSource& faces_;
-    // Screen objects and navigation stack are added by the UI work package (fixed storage).
+    struct Impl;
+    static constexpr std::size_t kStorageBytes = 3072; ///< checked against sizeof(Impl) in ui.cpp
+    alignas(std::max_align_t) std::array<std::byte, kStorageBytes> storage_{};
+    Impl* impl_ = nullptr; ///< placement-constructed in storage_
 };
 
 } // namespace qz::ui
