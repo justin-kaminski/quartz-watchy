@@ -1,0 +1,31 @@
+menu "Quartz"
+
+    config QZ_RADIO
+        bool "Compile the radio stack (Wi-Fi, SNTP, HTTPS weather, provisioning)"
+        default y
+        help
+            Disable for an offline-only build: qz_net compiles stubs and no Wi-Fi, lwIP or
+            mbedTLS symbols are linked. CI verifies the offline image with nm.
+
+    config QZ_USB_WAKE
+        bool "Wake from deep sleep when USB is attached (EXT0 on the USB-detect pin)"
+        default y
+        help
+            Disable if bring-up measurement B9 shows a measurable deep-sleep current cost; USB is
+            then noticed at the next minute tick instead.
+
+    config QZ_SELFTEST_INTERACTIVE
+        bool "Include interactive checks (button presses, vibration) in the self-test"
+        default y
+
+    config QZ_SNTP_SERVER_1
+        string "Primary SNTP server"
+        depends on QZ_RADIO
+        default "pool.ntp.org"
+
+    config QZ_SNTP_SERVER_2
+        string "Secondary SNTP server"
+        depends on QZ_RADIO
+        default "time.google.com"
+
+endmenu

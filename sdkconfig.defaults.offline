@@ -1,0 +1,2 @@
+# Offline-only build: the radio stack is compiled out entirely (SPEC: "Off means off" in hardware too).
+CONFIG_QZ_RADIO=n

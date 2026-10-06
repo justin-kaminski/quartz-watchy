@@ -12,5 +12,9 @@ echo "== component contract =="; tools/check_deps.py
 echo "== format =="; tools/format.sh --check
 echo "== host build + tests =="; tools/host.sh all
 if [ "${fast}" -eq 0 ]; then echo "== clang-tidy =="; tools/tidy.sh; fi
-if [ "${fw}" -eq 1 ]; then echo "== firmware build =="; tools/fw.sh build; fi
+if [ "${fw}" -eq 1 ]; then
+  echo "== firmware build (radio) =="; tools/fw.sh build
+  echo "== firmware build (offline) =="; QZ_FW_VARIANT=offline tools/fw.sh build
+  echo "== offline image has no radio symbols =="; tools/check_offline.sh
+fi
 echo "== ALL CHECKS PASSED =="

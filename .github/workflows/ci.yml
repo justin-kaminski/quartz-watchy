@@ -83,8 +83,12 @@ jobs:
         run: |
           expected="$(tr -d '[:space:]' < .idf-version)"
           tools/idf.sh idf.py --version | grep -q "ESP-IDF ${expected}"
-      - name: Build
+      - name: Build (radio)
         run: tools/fw.sh build
+      - name: Build (offline, radio compiled out)
+        run: QZ_FW_VARIANT=offline tools/fw.sh build
+      - name: Offline image has no radio symbols
+        run: tools/check_offline.sh
       - name: Upload firmware images
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
