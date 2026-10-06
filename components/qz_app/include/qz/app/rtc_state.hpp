@@ -28,8 +28,17 @@ struct RtcHeader {
     std::uint32_t magic = 0;
     std::uint16_t version = 0;
     std::uint16_t size = 0;  ///< sizeof(RtcState)
-    std::uint32_t crc32 = 0; ///< over the bytes after the header
+    std::uint32_t crc32 = 0; ///< over boot_count and every byte after the header (RtcStore)
     std::uint32_t boot_count = 0;
+};
+
+/// `Error::detail` of the kCorrupt returned by RtcStore::load / load_frame (diagnostics only).
+enum class RtcCorruptReason : std::uint8_t {
+    kRegionTooSmall = 1,
+    kMagic = 2,
+    kVersion = 3,
+    kSize = 4,
+    kCrc = 5,
 };
 
 struct DisplayState {
@@ -42,11 +51,13 @@ struct DisplayState {
 };
 
 struct WakeTiming {
-    std::int64_t scheduled_wake_rtc_us = 0; ///< target of the pending timer wake
+    std::int64_t scheduled_wake_rtc_us = 0; ///< raw RTC instant of the pending timer wake, 0 = none
     std::int32_t ewma_latency_us = 350'000; ///< wake-ahead lead (ARCHITECTURE.md 8.4) [TUNE]
     std::uint16_t crash_count_window = 0;   ///< panics within the 10-min window
     std::uint8_t safe_mode = 0;
     std::uint8_t reserved = 0;
+    /// Start of the 10-min crash window; while safe_mode != 0 it holds the safe-mode entry time
+    /// (the 24 h expiry reference, WakePlanner).
     std::int64_t crash_window_start_rtc_us = 0;
 };
 
@@ -79,9 +90,10 @@ class RtcStore {
 public:
     RtcStore(std::span<std::uint8_t> state_region, std::span<std::uint8_t> frame_region) noexcept;
     /// Copies the region into `out` if magic/version/size/CRC are valid; else kCorrupt (out
-    /// untouched).
+    /// untouched; Error::detail is an RtcCorruptReason). Byte-wise copies: no alignment assumed.
     Status load(RtcState& out) const noexcept;
-    /// Writes header (CRC) + payload; call right before sleep.
+    /// Writes payload and a header (magic, version, size, CRC recomputed over the stored bytes);
+    /// the caller's `state.header` only contributes boot_count. Call right before sleep.
     void commit(const RtcState& state) noexcept;
     Status load_frame(gfx::Framebuffer& out) const noexcept;
     void commit_frame(const gfx::Framebuffer& frame) noexcept;
