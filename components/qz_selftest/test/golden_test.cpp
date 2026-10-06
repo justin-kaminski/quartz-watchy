@@ -87,7 +87,9 @@ TEST(GoldenSet, RegeneratedCrcTableEqualsCommittedInc) {
 class Machinery : public ::testing::Test {
 protected:
     void SetUp() override {
-        root_ = fs::path(::testing::TempDir()) / "qz_golden_machinery";
+        // Unique per process: ctest runs each test in its own process, in parallel.
+        root_ = fs::path(::testing::TempDir()) /
+                ("qz_golden_machinery_" + std::to_string(static_cast<long>(::getpid())));
         std::error_code ec;
         fs::remove_all(root_, ec);
         fs::create_directories(root_ / "golden", ec);
