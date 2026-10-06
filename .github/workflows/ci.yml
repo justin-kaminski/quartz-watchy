@@ -89,6 +89,8 @@ jobs:
         run: QZ_FW_VARIANT=offline tools/fw.sh build
       - name: Offline image has no radio symbols
         run: tools/check_offline.sh
+      - name: Radio image contains the radio stack
+        run: tools/check_radio.sh
       - name: Upload firmware images
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

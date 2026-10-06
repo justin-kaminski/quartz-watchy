@@ -1,0 +1,15 @@
+# The product's main/Kconfig.projbuild owns these symbols; the test app needs the same two so
+# qz_net compiles its radio implementation. Keep defaults identical.
+menu "Quartz"
+    config QZ_RADIO
+        bool "Compile the radio stack"
+        default y
+    config QZ_SNTP_SERVER_1
+        string "Primary SNTP server"
+        depends on QZ_RADIO
+        default "pool.ntp.org"
+    config QZ_SNTP_SERVER_2
+        string "Secondary SNTP server"
+        depends on QZ_RADIO
+        default "time.google.com"
+endmenu

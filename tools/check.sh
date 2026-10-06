@@ -18,5 +18,6 @@ if [ "${fw}" -eq 1 ]; then
   echo "== firmware build (radio) =="; tools/fw.sh build
   echo "== firmware build (offline) =="; QZ_FW_VARIANT=offline tools/fw.sh build
   echo "== offline image has no radio symbols =="; tools/check_offline.sh
+  echo "== radio image has the radio stack =="; tools/check_radio.sh
 fi
 echo "== ALL CHECKS PASSED =="
