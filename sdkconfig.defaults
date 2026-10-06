@@ -17,6 +17,9 @@ CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
 
 # --- Clocks and power ---
 CONFIG_RTC_CLK_SRC_EXT_CRYS=y
+# Calibration runs twice on EVERY boot incl. deep-sleep wakes (esp_system clk.c select_rtc_slow_clk):
+# the default 3000 cycles is ~91 ms each of busy-wait (~60 uA average at 1440 wakes/day).
+CONFIG_RTC_CLK_CAL_CYCLES=1024
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
 # Buttons have external pull-ups [docs/research/hardware.md]: IDF must not add pulls on wake pins.
 CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS=n

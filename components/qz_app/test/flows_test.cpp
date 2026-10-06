@@ -324,22 +324,25 @@ TEST(AppButton, MenuNavigationSavesTwelveHourSetting) {
     EXPECT_EQ(load_rtc(env).settings.hour_format, model::HourFormat::k12h);
 }
 
-TEST(AppButton, HeldButtonAtTheEndDisablesButtonWake) {
+TEST(AppButton, HeldButtonAtTheEndKeepsTheButtonSourceArmedPerPin) {
     Env env;
     (void)env.boot_with_time();
-    // Held far longer than the 5 s release wait: sleeping with the button wake armed would
-    // re-wake the chip immediately.
+    // Held far longer than the 5 s release wait.
     const hal::SleepPlan plan = button_session(env, hal::kButtonBitUp, 120 * kUs);
     (void)plan;
     // The session itself waits for the release, so the plan is normal here...
     EXPECT_EQ(env.io.pressed_buttons(), 0);
 
-    // ...but a non-interactive wake with a stuck button must not re-arm the button source.
+    // ...and a non-interactive wake with a stuck button keeps wake_on_buttons set: the platform
+    // leaves out the pins that are already at their wake level (sleep.cpp build_deep_arm), and
+    // turning every button wake off could leave a Critical-level watch with no wake source at all
+    // (pre-flash review finding 2). The plan must still have SOME wake source.
     env.clock.advance_rtc_us(10 * kUs);
     env.io.press(hal::kButtonBitDown); // never released
     env.sys.set_wake(hal::ResetReason::kDeepSleep, timer_wake());
     const hal::SleepPlan stuck = env.app->run_wake();
-    EXPECT_FALSE(stuck.wake_on_buttons);
+    EXPECT_TRUE(stuck.wake_on_buttons);
+    EXPECT_TRUE(stuck.wake_on_buttons || stuck.timer_us >= 0 || stuck.wake_on_usb);
     env.io.release(hal::kButtonBitDown);
 }
 

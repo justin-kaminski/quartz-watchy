@@ -223,6 +223,7 @@ public:
     /// Always kUnsupported: the board has no MISO; the 3-wire read turnaround is not implemented
     /// ([TECH-DEBT] in docs/STATUS.md, needed only for bring-up E1).
     Status read(std::span<std::uint8_t> out) override;
+    [[nodiscard]] bool supports_read() const override { return false; }
     [[nodiscard]] bool busy() const override;
     Status wait_idle(std::uint32_t timeout_ms) override;
 

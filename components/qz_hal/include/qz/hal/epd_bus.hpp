@@ -24,6 +24,9 @@ public:
     /// Reads parameter bytes after a read command using the 3-wire turnaround on SDA at <= 2.5 MHz
     /// [ssd1681.md s2]. Optional: kUnsupported if the implementation cannot read.
     virtual Status read(std::span<std::uint8_t> out) = 0;
+    /// False when read() can only return kUnsupported (lets the driver skip the temperature
+    /// sequence instead of paying a BUSY cycle for a read that cannot succeed).
+    [[nodiscard]] virtual bool supports_read() const { return true; }
     /// Current BUSY level, true = controller busy.
     [[nodiscard]] virtual bool busy() const = 0;
     /// Blocks until BUSY is low. Battery: light sleep with GPIO wake on BUSY; tethered: polls.

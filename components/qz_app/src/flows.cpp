@@ -621,7 +621,7 @@ PlanRequest Core::make_plan_request(std::int64_t sleep_override_us) const noexce
     req.now_rtc_us = p_.clock.rtc_us();
     req.level = power_.level();
     req.decision = power_.decision();
-    req.tap_wake = tap_desired() && (rtc_.reserved[0] & wiring::kFlagTapArmed) != 0;
+    req.tap_wake = tap_desired() && accel_ok_ && (rtc_.reserved[0] & wiring::kFlagTapArmed) != 0;
     req.usb_wake = f_.usb_wake;
     req.usb_present = p_.io.usb_present();
     req.sleep_override_us = sleep_override_us;
@@ -631,10 +631,10 @@ PlanRequest Core::make_plan_request(std::int64_t sleep_override_us) const noexce
 hal::SleepPlan Core::finish_wake(std::int64_t sleep_override_us) noexcept {
     wait_for_release();
     record_wake();
-    WakePlan plan = planner_.plan(make_plan_request(sleep_override_us));
-    if (w_.held_at_end) {
-        plan.sleep.wake_on_buttons = false; // still held: it would re-wake immediately
-    }
+    const WakePlan plan = planner_.plan(make_plan_request(sleep_override_us));
+    // A button that is still held is excluded per pin by the platform (build_deep_arm leaves out
+    // pins already at their wake level), so wake_on_buttons stays on: turning every button wake off
+    // could leave a Critical-level watch with no wake source at all (pre-flash review finding 2).
     commit_all();
     return plan.sleep;
 }

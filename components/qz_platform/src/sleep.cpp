@@ -151,6 +151,17 @@ DeepWakeArm build_deep_arm(const hal::SleepPlan& plan) noexcept {
 
 /// Holds one parked output: level first, then direction (output), then the hold. The hold freezes
 /// the pad immediately, so this must be the LAST thing done to the pin before sleep.
+/// rtc_gpio_isolate only clears the RTC-side input enable/pulls, which matter when the pad is
+/// routed to the RTC mux; release_holds()/gpio_config left these pads routed to the digital matrix
+/// as inputs with the input buffer on, so switch the digital side off first
+/// [IDF:esp_driver_gpio/src/rtc_io.c rtc_gpio_isolate, review finding 3].
+void isolate_pad(std::uint8_t pin) noexcept {
+    (void)gpio_set_direction(gpio(pin), GPIO_MODE_DISABLE);
+    (void)gpio_pullup_dis(gpio(pin));
+    (void)gpio_pulldown_dis(gpio(pin));
+    (void)rtc_gpio_isolate(gpio(pin));
+}
+
 void park_output(const ParkedOutput& p) noexcept {
     // Order: write the output register while the matrix may still route a peripheral signal to the
     // pad (the register has no effect until the pad is switched to plain GPIO), then switch the pad
@@ -238,7 +249,9 @@ void IdfSleep::deep_sleep(const hal::SleepPlan& plan) {
         armed_ok &= ok;
         timer_armed = ok;
     }
-    if (!armed_ok && !timer_armed) {
+    // Never sleep with no wake source (e.g. Critical level with USB present and a held button):
+    // arm the fallback timer when arming failed OR nothing was armed at all.
+    if (!timer_armed && (!armed_ok || (arm.ext1_mask == 0 && !arm.ext0))) {
         (void)esp_sleep_enable_timer_wakeup(kFallbackWakeUs);
     }
 
@@ -255,10 +268,10 @@ void IdfSleep::deep_sleep(const hal::SleepPlan& plan) {
                      pin_bit(board::kChargeStatus));
 
     for (const std::uint8_t pin : kIsolateAlways) {
-        (void)rtc_gpio_isolate(gpio(pin)); // input/output/pulls off + hold [IDF rtc_io.h]
+        isolate_pad(pin);
     }
     if ((arm.ext1_mask & pin_bit(board::kAccelInt1)) == 0) {
-        (void)rtc_gpio_isolate(gpio(board::kAccelInt1));
+        isolate_pad(board::kAccelInt1);
     }
 
     // Outputs last: the holds freeze the pads.

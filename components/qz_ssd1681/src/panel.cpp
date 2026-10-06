@@ -243,6 +243,9 @@ Result<std::int16_t> Panel::temperature_dc() noexcept {
     if (state_ != State::kReady) {
         return Errc::kInvalidState;
     }
+    if (!bus_.supports_read()) {
+        return Errc::kUnsupported; // no BUSY cycle for a read that cannot succeed
+    }
     // The register holds its POR value (127.9 C) until a sequence loads the sensor, so run the
     // documented "load temperature + LUT only, no display" sequence B1 first [R1 s5, s6].
     if (const Status loaded = run_steps(bus_, kLoadTemperature); !loaded) {
