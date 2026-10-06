@@ -13,6 +13,7 @@ echo "== generated fonts are current =="; python3 tools/fontgen.py --check
 echo "== generated tz table is current =="; python3 tools/tzgen.py --check
 echo "== format =="; tools/format.sh --check
 echo "== host build + tests =="; tools/host.sh all
+echo "== qzctl unit tests =="; "${QZ_ROOT}/.venv/bin/python" -W error -m pytest tools/qzctl/tests -q
 if [ "${fast}" -eq 0 ]; then echo "== clang-tidy =="; tools/tidy.sh; fi
 if [ "${fw}" -eq 1 ]; then
   echo "== firmware build (radio) =="; tools/fw.sh build
