@@ -65,6 +65,8 @@ Milestone M1 (host face) is done: `build/host/sim/qz_sim --face default --time .
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.
 - [TECH-DEBT] BMA423 blob authenticity (P-12/Q-13).
+- [TECH-DEBT] Platform (WP-24): RTC region sizes (2048 B state, 5024 B frame) are hard-coded in `qz_platform/src/platform_impl.hpp` but WP-20 pinned `RtcState` = 1024 B and `FrameShadow` = 5008 B (6032 B total, budget 7680). Align them and add a `static_assert` against `sizeof(RtcState)`/`sizeof(FrameShadow)` in `main/` (WP-28/21). With the current numbers `.rtc_noinit` is 7072 B of the 8 KiB RTC slow memory.
+- [TECH-DEBT] Platform (WP-24): `QZ_GIT_HASH` is empty until WP-28 injects it; vibration polarity (active-high), "wake pins carry no pad hold" and RTC-time continuity across `esp_restart` are [ASSUMED] until bring-up.
 - [TECH-DEBT] UI (WP-14): optional click vibration (15 ms) not implemented (needs a decision on the `vibration` setting; an extra action would break the one-action-per-save rule); add a UI-level zero-allocation test in the sim.
 - [TECH-DEBT] UI (WP-14): idle timeouts for Provisioning (5 min), SyncNow (60 s), ChargeMe (2 s) and the 3 s MENU hold for FactoryReset are [ASSUMED]; no menu row opens the sync-interval choice yet.
 - [TECH-DEBT] Console (WP-18): WP-21 must override DeviceApi::screen_count/screen_name_at/wifi_has_password.

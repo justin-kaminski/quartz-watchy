@@ -1,0 +1,6 @@
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_FREERTOS_HZ=1000
+# Same slow clock as the product, so rtc_us() behaves like the real thing.
+CONFIG_RTC_CLK_SRC_EXT_CRYS=y
