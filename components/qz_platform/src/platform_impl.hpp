@@ -43,9 +43,16 @@ public:
     Status init() noexcept;
 
     [[nodiscard]] std::uint8_t pressed_buttons() const override;
+    [[nodiscard]] std::uint8_t take_latched_buttons() override;
     [[nodiscard]] bool usb_present() const override;
     [[nodiscard]] bool charging() const override;
     void set_vibration(bool on) override;
+
+    /// Samples the buttons into the latch. IdfSleep calls it after every light-sleep wake.
+    void latch_buttons() noexcept;
+
+private:
+    std::uint8_t latched_ = 0;
 };
 
 /// Battery-pin ADC (ADC1 oneshot + curve-fitting calibration). Hardware is set up lazily on the
@@ -169,7 +176,7 @@ public:
     /// Light sleeps shorter than this are polled instead (sleep entry/exit overhead dominates).
     static constexpr std::int64_t kMinLightSleepUs = 3000;
 
-    explicit IdfSleep(hal::BoardIo& io) noexcept : io_(io) {}
+    explicit IdfSleep(IdfBoardIo& io) noexcept : io_(io) {}
     IdfSleep(const IdfSleep&) = delete;
     IdfSleep& operator=(const IdfSleep&) = delete;
 
@@ -182,6 +189,8 @@ public:
     /// deep sleep. Does not return unless the IDF rejects the sleep request, in which case all
     /// holds are released and the chip restarts (esp_restart).
     void deep_sleep(const hal::SleepPlan& plan) override;
+    /// Unpressed buttons always wake the chip and are latched (IdfBoardIo::latch_buttons); when
+    /// the plan did not ask for button wakes the sleep then resumes until its own wake condition.
     hal::LightSleepWake light_sleep(const hal::SleepPlan& plan) override;
 
     /// Undoes everything deep_sleep() latched: drives the parked outputs to their parked level
@@ -191,7 +200,9 @@ public:
     static Status release_holds() noexcept;
 
 private:
-    hal::BoardIo& io_;
+    hal::LightSleepWake light_sleep_once(const hal::SleepPlan& plan);
+
+    IdfBoardIo& io_;
     bool tethered_ = false;
     bool outputs_kept_in_light_sleep_ = false;
 };

@@ -20,6 +20,9 @@ public:
     virtual ~BoardIo() = default;
     /// Currently pressed buttons (bit per kButtonBit*), true = pressed.
     [[nodiscard]] virtual std::uint8_t pressed_buttons() const = 0;
+    /// Buttons seen pressed since the last call (bit per kButtonBit*), then cleared. Catches taps
+    /// that start and end between two pressed_buttons() samples, e.g. during a panel refresh.
+    [[nodiscard]] virtual std::uint8_t take_latched_buttons() = 0;
     /// USB VBUS detected (USB detect pin).
     [[nodiscard]] virtual bool usb_present() const = 0;
     /// STAT pin (GPIO10). HIGH whenever USB is present, charging or full [R1 s5]: diagnostics only.

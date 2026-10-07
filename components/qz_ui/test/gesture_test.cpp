@@ -31,9 +31,9 @@ struct Rec {
     std::vector<InputEvent> all;
 
     /// Samples at `ms`; returns just this call's events (also appended to `all`).
-    std::vector<InputEvent> at(std::uint8_t mask, std::int64_t ms) {
+    std::vector<InputEvent> at(std::uint8_t mask, std::int64_t ms, std::uint8_t latched = 0) {
         StaticVector<InputEvent, 8> out;
-        r.sample(mask, us(ms), out);
+        r.sample(mask, us(ms), out, latched);
         std::vector<InputEvent> v(out.begin(), out.end());
         all.insert(all.end(), v.begin(), v.end());
         return v;
@@ -46,6 +46,44 @@ void expect_event(
     EXPECT_EQ(e.kind, k);
     EXPECT_EQ(e.held_ms, held_ms);
     EXPECT_EQ(e.t_us, us(t_ms));
+}
+
+TEST(Gesture, LatchedTapBetweenSamplesIsAClick) {
+    Rec g;
+    const auto ev = g.at(0, 500, kDown); // pressed and released while the caller was busy
+    ASSERT_EQ(ev.size(), 1U);
+    expect_event(ev[0], Button::kDown, InputKind::kClick, 0, 500);
+    EXPECT_FALSE(g.r.any_pressed());
+    EXPECT_TRUE(g.at(0, 600).empty()); // reported once
+}
+
+TEST(Gesture, LatchedButtonStillDownTakesTheNormalPath) {
+    Rec g;
+    EXPECT_TRUE(g.at(kMenu, 0, kMenu).empty());
+    EXPECT_TRUE(g.at(kMenu, 25).empty());
+    EXPECT_TRUE(g.at(0, 100).empty());
+    const auto ev = g.at(0, 125);
+    ASSERT_EQ(ev.size(), 1U); // exactly one Click, not a second one from the latch
+    expect_event(ev[0], Button::kMenu, InputKind::kClick, 100, 100);
+}
+
+TEST(Gesture, LatchedButtonAlreadyTrackedIsNotDoubled) {
+    Rec g;
+    EXPECT_TRUE(g.at(kUp, 0).empty());
+    EXPECT_TRUE(g.at(kUp, 25).empty());
+    const auto ev = g.at(0, 200, kUp); // released during a wait: the release path reports it
+    EXPECT_TRUE(ev.empty());
+    const auto done = g.at(0, 225);
+    ASSERT_EQ(done.size(), 1U);
+    expect_event(done[0], Button::kUp, InputKind::kClick, 200, 200);
+}
+
+TEST(Gesture, LatchedResetChordIsIgnored) {
+    Rec g;
+    EXPECT_TRUE(g.at(0, 100, static_cast<std::uint8_t>(kBack | kUp)).empty());
+    const auto ev = g.at(0, 200, kMenu);
+    ASSERT_EQ(ev.size(), 1U);
+    EXPECT_EQ(ev[0].button, Button::kMenu);
 }
 
 TEST(Gesture, ShortPressIsClickAfterReleaseDebounce) {

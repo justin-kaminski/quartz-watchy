@@ -41,18 +41,19 @@ inline constexpr std::uint16_t kDisplayChargeMeShown = 1U << 0U;
 inline constexpr std::size_t kBatterySamples = 16;        ///< ARCHITECTURE.md section 11
 inline constexpr std::int64_t kCriticalPeekUs = 10 * kUs; ///< ARCHITECTURE.md section 11
 inline constexpr std::int64_t kSessionMaxUs =
-    15LL * 60 * kUs;                                         ///< hard cap of an interactive session
-inline constexpr std::int64_t kPressedPollUs = 25'000;       ///< sampling period while held [TUNE]
-inline constexpr std::int64_t kMinWaitUs = 1'000;            ///< shortest light-sleep timer
-inline constexpr std::int64_t kReleaseWaitMaxUs = 5 * kUs;   ///< wait for release before sleeping
-inline constexpr std::int64_t kTetherPollUs = 1 * kUs;       ///< ARCHITECTURE.md section 17
-inline constexpr std::int64_t kTetherReceiveMaxUs = 250'000; ///< console receive slice [TUNE]
-inline constexpr std::int64_t kProvPollUs = 200'000;         ///< portal service period [TUNE]
-inline constexpr std::uint32_t kPortalPollMs = 20;           ///< blocking time of one portal poll
-inline constexpr std::uint16_t kGoalVibrationMs = 200;       ///< goal reached pulse [TUNE]
-inline constexpr std::int16_t kTempFullRefreshDc = 100;      ///< ARCHITECTURE.md section 14: 10 C
-inline constexpr std::uint16_t kProvisioningTtlS = 300;      ///< conn::Provisioning expiry
-inline constexpr std::int64_t kEarlyTickWindowUs = 2 * kUs;  ///< > latency_max (1.5 s) [TUNE]
+    15LL * 60 * kUs;                                       ///< hard cap of an interactive session
+inline constexpr std::int64_t kPressedPollUs = 25'000;     ///< sampling period while held [TUNE]
+inline constexpr std::int64_t kMinWaitUs = 1'000;          ///< shortest light-sleep timer
+inline constexpr std::int64_t kReleaseWaitMaxUs = 5 * kUs; ///< wait for release before sleeping
+inline constexpr std::int64_t kTetherPollUs = 1 * kUs;     ///< ARCHITECTURE.md section 17
+/// Console receive slice. Buttons are only sampled between slices, so it stays below a short tap.
+inline constexpr std::int64_t kTetherReceiveMaxUs = 25'000; ///< [TUNE]
+inline constexpr std::int64_t kProvPollUs = 200'000;        ///< portal service period [TUNE]
+inline constexpr std::uint32_t kPortalPollMs = 20;          ///< blocking time of one portal poll
+inline constexpr std::uint16_t kGoalVibrationMs = 200;      ///< goal reached pulse [TUNE]
+inline constexpr std::int16_t kTempFullRefreshDc = 100;     ///< ARCHITECTURE.md section 14: 10 C
+inline constexpr std::uint16_t kProvisioningTtlS = 300;     ///< conn::Provisioning expiry
+inline constexpr std::int64_t kEarlyTickWindowUs = 2 * kUs; ///< > latency_max (1.5 s) [TUNE]
 inline constexpr std::size_t kRecentWakes = 8;
 inline constexpr std::int32_t kDriftPersistDeltaPpb = 1000; ///< ARCHITECTURE.md section 7
 inline constexpr std::uint16_t kSleepMaxS = 3600;

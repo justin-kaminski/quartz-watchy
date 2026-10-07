@@ -46,7 +46,8 @@ bool Core::handle_event(const model::InputEvent& event) noexcept {
 
 void Core::sample_buttons() noexcept {
     StaticVector<model::InputEvent, 8> events;
-    recognizer_.sample(p_.io.pressed_buttons(), p_.clock.rtc_us(), events);
+    const std::uint8_t latched = p_.io.take_latched_buttons(); // before the live sample
+    recognizer_.sample(p_.io.pressed_buttons(), p_.clock.rtc_us(), events, latched);
     for (const model::InputEvent& event : events) {
         handle_event(event);
     }

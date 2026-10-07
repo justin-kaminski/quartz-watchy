@@ -161,10 +161,11 @@ Status IdfEpdBus::wait_idle(std::uint32_t timeout_ms) {
     const std::int64_t deadline_us =
         esp_rtc_get_time_us() + static_cast<std::int64_t>(timeout_ms) * 1000;
     hal::SleepPlan plan{};
-    plan.wake_on_buttons = false; // a press during the waveform is picked up after the update
+    plan.wake_on_buttons = false; // presses during the waveform are latched by IdfSleep
     plan.wake_on_accel = false;
     plan.wake_on_usb = false;
     plan.wake_on_epd_idle = true;
+    breadcrumb(Phase::kEpdBusyStart);
     while (busy()) {
         const std::int64_t remaining_us = deadline_us - esp_rtc_get_time_us();
         if (remaining_us <= 0) {
@@ -175,6 +176,7 @@ Status IdfEpdBus::wait_idle(std::uint32_t timeout_ms) {
         plan.timer_us = remaining_us;
         (void)sleep_.light_sleep(plan); // the cause is irrelevant: busy() decides
     }
+    breadcrumb(Phase::kEpdBusyEnd);
     return Status{};
 }
 

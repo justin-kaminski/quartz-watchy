@@ -18,6 +18,12 @@ std::uint8_t FakeBoardIo::pressed_buttons() const {
     return pressed_;
 }
 
+std::uint8_t FakeBoardIo::take_latched_buttons() {
+    const std::uint8_t latched = latched_;
+    latched_ = 0;
+    return latched;
+}
+
 bool FakeBoardIo::usb_present() const {
     return usb_;
 }
@@ -51,6 +57,7 @@ Result<std::uint16_t> FakeBoardIo::read_pin_mv() {
 void FakeBoardIo::press(std::uint8_t mask) {
     QZ_ASSERT((mask & ~kAllButtons) == 0);
     pressed_ = static_cast<std::uint8_t>(pressed_ | mask);
+    latched_ = static_cast<std::uint8_t>(latched_ | mask);
 }
 
 void FakeBoardIo::release(std::uint8_t mask) {

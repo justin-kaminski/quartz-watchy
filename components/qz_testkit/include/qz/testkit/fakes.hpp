@@ -307,6 +307,8 @@ public:
     explicit FakeBoardIo(const VirtualClock& clock) : clock_(&clock) {}
     explicit FakeBoardIo(const VirtualClock&&) = delete; // would dangle
     [[nodiscard]] std::uint8_t pressed_buttons() const override;
+    /// Every press() is latched, as if the firmware were asleep through it.
+    [[nodiscard]] std::uint8_t take_latched_buttons() override;
     [[nodiscard]] bool usb_present() const override;
     [[nodiscard]] bool charging() const override;
     void set_vibration(bool on) override;
@@ -329,6 +331,7 @@ private:
 
     const VirtualClock* clock_ = nullptr;
     std::uint8_t pressed_ = 0;
+    std::uint8_t latched_ = 0;
     bool usb_ = false;
     bool charging_ = false;
     bool vibrating_ = false;

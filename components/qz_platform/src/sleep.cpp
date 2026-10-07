@@ -4,6 +4,7 @@
 // B9 (sleep floor) confirm the [ASSUMED] items listed in docs/STATUS.md.
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
+#include "esp_rom_sys.h"
 #include "esp_rtc_time.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
@@ -13,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 
 namespace qz::platform {
 namespace {
@@ -63,6 +65,9 @@ constexpr std::array<ParkedOutput, 5> kEpdPark = {{
 constexpr std::uint8_t kIsolateAlways[] = {board::kBatteryAdc, board::kAccelInt2};
 
 constexpr std::array<std::uint8_t, 4> kButtonPins = board::kButtonPins;
+/// UP is index 2 of the board's button table (Menu, Back, Up, Down); GPIO0, a strapping pin.
+constexpr std::uint8_t kButtonUpPin = kButtonPins[2];
+static_assert(kButtonUpPin == 0, "UP is expected on GPIO0 (strapping pin)");
 
 static_assert(board::is_rtc_gpio(board::kVibration) && board::is_rtc_gpio(board::kBatteryAdc) &&
                   board::is_rtc_gpio(board::kAccelInt1) && board::is_rtc_gpio(board::kAccelInt2),
@@ -129,6 +134,24 @@ DeepWakeArm build_deep_arm(const hal::SleepPlan& plan) noexcept {
         configure_inputs(pin_bit(cfg.ext0_gpio));
     }
 
+    // GPIO0 (UP) is a strapping pin. On the first hardware run (2026-10-06) the sleep hardware saw
+    // it LOW with the button released (RTC-domain read), so EXT1 any-low refused every deep sleep:
+    // the digital read is high only thanks to the strapping pull-up, which does not apply once the
+    // pad is routed to RTC for sleep, and the board's external pull-up is evidently not effective
+    // on this unit [R1 hardware.md s6 lists one; populated values were unverified]. Give it an RTC
+    // pull-up (harmless next to an external one) and judge its level the way the sleep hardware
+    // does. RTC_PERIPH stays powered so the pull holds [IDF:esp_sleep.h esp_sleep_pd_config].
+    bool gpio0_rtc = false;
+    if ((candidates & pin_bit(kButtonUpPin)) != 0) {
+        const gpio_num_t up = gpio(kButtonUpPin);
+        (void)rtc_gpio_init(up);
+        (void)rtc_gpio_set_direction(up, RTC_GPIO_MODE_INPUT_ONLY);
+        (void)rtc_gpio_pulldown_dis(up);
+        (void)rtc_gpio_pullup_en(up);
+        esp_rom_delay_us(100); // let the ~45 kOhm pull-up charge the pad
+        gpio0_rtc = true;
+    }
+
     DeepWakeArm arm{};
     arm.ext1_level = cfg.ext1_level;
     for (std::uint8_t pin = 0; pin < 64 && candidates != 0; ++pin) {
@@ -137,9 +160,17 @@ DeepWakeArm build_deep_arm(const hal::SleepPlan& plan) noexcept {
             continue;
         }
         candidates &= ~bit;
-        if (!at_level(pin, cfg.ext1_level)) {
+        const bool at_wake_level =
+            (gpio0_rtc && pin == kButtonUpPin)
+                ? static_cast<std::uint32_t>(rtc_gpio_get_level(gpio(pin))) ==
+                      level_value(cfg.ext1_level)
+                : at_level(pin, cfg.ext1_level);
+        if (!at_wake_level) {
             arm.ext1_mask |= bit;
         }
+    }
+    if ((arm.ext1_mask & pin_bit(kButtonUpPin)) != 0) {
+        (void)esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     }
     if (cfg.ext0_enabled && !at_level(cfg.ext0_gpio, cfg.ext0_level)) {
         arm.ext0 = true;
@@ -283,10 +314,42 @@ void IdfSleep::deep_sleep(const hal::SleepPlan& plan) {
 
     // ---- 3. sleep ---------------------------------------------------------------------------
     // Does not return unless the request is rejected (wake source already pending).
-    (void)esp_deep_sleep_try_to_start();
+    breadcrumb(Phase::kSleepRequested);
+    const esp_err_t rejected = esp_deep_sleep_try_to_start();
 
-    // Rejected: undo everything that was latched and restart cleanly (reset reason = software;
-    // the next boot re-runs the full init and re-plans). Never continue with parked pads.
+    // Rejected: a wake source was already pending at sleep entry. Record which armed pins the
+    // sleep hardware sees at their wake level (RTC-domain read, which can differ from the digital
+    // read used in build_deep_arm), then retry with the timer only instead of restarting: a restart
+    // forces a full refresh, and the first hardware run showed a refuse/restart loop every ~2 s.
+    std::int32_t at_wake_level = 0;
+    for (std::uint8_t pin = 0; pin < 31; ++pin) {
+        const bool in_ext1 = (arm.ext1_mask & pin_bit(pin)) != 0;
+        const bool is_ext0 = arm.ext0 && arm.ext0_gpio == pin;
+        if (!in_ext1 && !is_ext0) {
+            continue;
+        }
+        const Level wake_level = is_ext0 ? arm.ext0_level : arm.ext1_level;
+        if (static_cast<std::uint32_t>(rtc_gpio_get_level(gpio(pin))) == level_value(wake_level)) {
+            at_wake_level |= static_cast<std::int32_t>(1U << pin);
+        }
+    }
+    const std::int32_t reject_flag =
+        rejected == ESP_ERR_SLEEP_REJECT ? std::numeric_limits<std::int32_t>::min() : 0;
+    breadcrumb(Phase::kSleepRejected, at_wake_level | reject_flag);
+
+    (void)esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    (void)esp_sleep_disable_ext1_wakeup_io(0);
+    const std::int64_t retry_us = timer_armed
+                                      ? std::min(std::max(plan.timer_us, kMinDeepSleepTimerUs),
+                                                 static_cast<std::int64_t>(kFallbackWakeUs))
+                                      : static_cast<std::int64_t>(kFallbackWakeUs);
+    (void)esp_sleep_enable_timer_wakeup(static_cast<std::uint64_t>(retry_us));
+    breadcrumb(Phase::kSleepRetry, static_cast<std::int32_t>(retry_us / 1000));
+    const esp_err_t retry = esp_deep_sleep_try_to_start();
+    breadcrumb(Phase::kSleepRetryRejected, static_cast<std::int32_t>(retry));
+
+    // Both refused: undo everything that was latched and restart cleanly. Never continue with
+    // parked pads.
     (void)release_holds();
     esp_restart();
 }
@@ -392,6 +455,29 @@ constexpr gpio_int_type_t wake_intr(Level level) noexcept {
 } // namespace
 
 hal::LightSleepWake IdfSleep::light_sleep(const hal::SleepPlan& plan) {
+    // A tap during a wait without button wakes (panel refresh, minute trigger) used to be lost
+    // when it ended before the wait did. Pressed pins are never armed (build_light_arm), so a
+    // held button cannot spin this loop.
+    hal::SleepPlan armed = plan;
+    armed.wake_on_buttons = true;
+    const bool has_timer = plan.timer_us >= 0;
+    const std::int64_t deadline_us = has_timer ? esp_rtc_get_time_us() + plan.timer_us : 0;
+    for (;;) {
+        const hal::LightSleepWake wake = light_sleep_once(armed);
+        io_.latch_buttons();
+        if (wake != hal::LightSleepWake::kButton || plan.wake_on_buttons) {
+            return wake;
+        }
+        if (has_timer) {
+            armed.timer_us = deadline_us - esp_rtc_get_time_us();
+            if (armed.timer_us <= 0) {
+                return hal::LightSleepWake::kTimer;
+            }
+        }
+    }
+}
+
+hal::LightSleepWake IdfSleep::light_sleep_once(const hal::SleepPlan& plan) {
     if (!outputs_kept_in_light_sleep_) {
         // CONFIG_ESP_SLEEP_GPIO_RESET_WORKAROUND=y (ESP32-S3 default, verified in the generated
         // sdkconfig) isolates every GPIO in light sleep through the SLP_SEL bit

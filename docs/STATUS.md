@@ -28,8 +28,16 @@ mode-2 waveform exists, P-11 risk reduced; visual quality still to be confirmed)
 loaded (P-12 blob works functionally), 32 kHz crystal running (32773 Hz measured), battery ADC 3906-3913 mV on USB,
 buttons idle, USB/charge pins, NVS round trip, heap 283 kB. Time set over the console; framebuffer shows the face.
 Host-side bug found and fixed: opening the port with DTR/RTS forced low resets the ESP32-S3 (qzctl now leaves them alone).
-Still to verify on hardware: what the panel actually looks like (orientation, ghosting, partial-update flicker), buttons
-after deep sleep, sleep current (B9), step counting (B7), behaviour unplugged.
+On battery (same day): deep sleep was refused every ~2 s (restart + full refresh loop). Breadcrumbs (RTC_NOINIT ring at
+0x50000000, read over USB JTAG with gdb `dump binary memory`) showed GPIO0 (UP) at its EXT1 wake level in the RTC
+domain with the button released: the strapping pull-up does not hold once the pad is routed to RTC, and the external
+pull-up is evidently not effective on this unit. Fix: RTC pull-up on GPIO0 before arming EXT1, its level judged by the
+RTC read, RTC_PERIPH kept powered while it is armed (sleep-current cost to measure in B9); a refused sleep now retries
+timer-only before restarting. Confirmed by the owner: per-minute partial updates on battery, all buttons wake, steps count.
+Second finding: taps were lost while the firmware waited on the panel (0.5-2 s) or on a 250 ms tethered console slice.
+Light sleep now always arms released buttons and latches them (`BoardIo::take_latched_buttons`, new HAL method;
+`GestureRecognizer::sample` takes the latch and turns an unseen tap into a Click); the tethered slice is 25 ms.
+Still to verify on hardware: the tap-latch fix, panel look (ghosting, flicker), sleep current (B9).
 
 ## Work packages
 | WP | State |

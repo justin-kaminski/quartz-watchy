@@ -103,8 +103,9 @@ TEST(AppTether, MinuteTicksKeepRunningWhileTethered) {
     Env env;
     (void)env.boot_with_time();
     env.io.set_usb(true, true);
-    env.console.hook = [&](std::uint32_t n) {
-        if (n == 560) { // ~140 s of 250 ms receive slices
+    const std::int64_t unplug_at = env.clock.rtc_us() + 140 * kUs; // two minute flips
+    env.console.hook = [&](std::uint32_t /*n*/) {
+        if (env.clock.rtc_us() >= unplug_at) {
             env.io.set_usb(false, false);
         }
     };

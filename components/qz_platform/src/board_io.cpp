@@ -97,6 +97,16 @@ std::uint8_t IdfBoardIo::pressed_buttons() const {
     return mask;
 }
 
+std::uint8_t IdfBoardIo::take_latched_buttons() {
+    const std::uint8_t latched = latched_;
+    latched_ = 0;
+    return latched;
+}
+
+void IdfBoardIo::latch_buttons() noexcept {
+    latched_ = static_cast<std::uint8_t>(latched_ | pressed_buttons());
+}
+
 bool IdfBoardIo::usb_present() const {
     const int level = gpio_get_level(static_cast<gpio_num_t>(board::kUsbDetect));
     return static_cast<std::uint32_t>(level) == level_value(board::kUsbDetectActive);

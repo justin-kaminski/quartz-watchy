@@ -75,6 +75,7 @@ void confirm_image_after_cold_boot(qz::hal::ResetReason reason) noexcept {
 
 extern "C" void app_main() {
     using namespace qz;
+    platform::breadcrumb(platform::Phase::kBoot); // first: survives a reset anywhere below
 
     // 1. Platform first: captures the boot RTC time, reset reason and wake sources, releases the
     //    deep-sleep pad holds and brings up GPIO, SPI and I2C.
@@ -88,6 +89,7 @@ extern "C" void app_main() {
         esp_restart();
     }
     platform::IdfPlatform& hw = **init;
+    platform::breadcrumb(platform::Phase::kPlatformReady);
 
     // 2. Features. The radio is on only when it is compiled in AND qz_net actually provides it
     //    (until WP-27 the factories return nullptr, so the first image is radio-off at run time).
@@ -127,6 +129,7 @@ extern "C" void app_main() {
 
     // 4. One complete wake. Tethered, this returns only when USB is gone or `sleep <s>` ran.
     hal::SleepPlan plan = application.run_wake();
+    platform::breadcrumb(platform::Phase::kWakeDone);
     confirm_image_after_cold_boot(hw.system().reset_reason());
 
     // 5. Sleep. CONFIG_QZ_USB_WAKE gates the EXT0 USB-attach wake source (STATUS.md tech debt).

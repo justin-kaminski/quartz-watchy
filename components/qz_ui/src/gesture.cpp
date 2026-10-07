@@ -86,8 +86,19 @@ void GestureRecognizer::emit_timed(std::size_t index,
 
 void GestureRecognizer::sample(std::uint8_t pressed_mask,
                                std::int64_t now_rtc_us,
-                               StaticVector<model::InputEvent, 8>& out) noexcept {
+                               StaticVector<model::InputEvent, 8>& out,
+                               std::uint8_t latched_mask) noexcept {
     const std::int64_t debounce_us = ms_to_us(timing_.debounce_ms);
+    // Pass 0: taps that began and ended between samples (the caller was busy or asleep without a
+    // button wake). A button down now, or already tracked, is left to the passes below.
+    const auto unseen = static_cast<std::uint8_t>(latched_mask & ~pressed_mask & ~raw_ & ~state_);
+    if ((unseen & kChord) != kChord) {
+        for (std::size_t i = 0; i < model::kButtonCount; ++i) {
+            if ((unseen & (1U << i)) != 0) {
+                (void)out.push_back({static_cast<Button>(i), InputKind::kClick, 0, now_rtc_us});
+            }
+        }
+    }
     // Pass 1: track raw level changes, accept settled presses.
     for (std::size_t i = 0; i < model::kButtonCount; ++i) {
         const auto bit = static_cast<std::uint8_t>(1U << i);

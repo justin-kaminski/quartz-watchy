@@ -144,10 +144,13 @@ public:
     explicit GestureRecognizer(GestureTiming timing = {}) noexcept;
     /// Wake seeded by EXT1: buttons in `mask` are treated as pressed since `press_rtc_us`.
     void seed(std::uint8_t pressed_mask, std::int64_t press_rtc_us) noexcept;
-    /// Feed a sample of hal::BoardIo::pressed_buttons(); appends 0..n events.
+    /// Feed a sample of hal::BoardIo::pressed_buttons(); appends 0..n events. `latched_mask`
+    /// (hal::BoardIo::take_latched_buttons()) holds buttons pressed since the previous sample: one
+    /// that is up now and was never seen down is a tap made between samples and becomes a Click.
     void sample(std::uint8_t pressed_mask,
                 std::int64_t now_rtc_us,
-                StaticVector<model::InputEvent, 8>& out) noexcept;
+                StaticVector<model::InputEvent, 8>& out,
+                std::uint8_t latched_mask = 0) noexcept;
     /// When the caller should sample next (for light-sleep timing); -1 = only on a pin change.
     [[nodiscard]] std::int64_t next_deadline_us() const noexcept;
     [[nodiscard]] bool any_pressed() const noexcept;

@@ -88,6 +88,7 @@ void Core::wait_for_release() noexcept {
         waited += wiring::kPressedPollUs;
     }
     w_.held_at_end = p_.io.pressed_buttons() != 0;
+    (void)p_.io.take_latched_buttons(); // the presses waited out here are not input
 }
 
 void Core::flush_steps() noexcept {

@@ -22,6 +22,24 @@ inline constexpr std::size_t kRtcStateRegionBytes = 1024; ///< sizeof(app::RtcSt
 inline constexpr std::size_t kRtcFrameRegionBytes = 5008; ///< sizeof(app::FrameShadow) = 8 + 5000
 static_assert(kRtcStateRegionBytes + kRtcFrameRegionBytes <= 7680, "RTC slow memory budget");
 
+/// Boot breadcrumbs (bring-up forensics): a small ring in RTC_NOINIT memory that survives
+/// brownout, watchdog and software resets. Every boot records the hardware reset reason; each
+/// phase below overwrites "last phase reached" of the current boot, so a reset mid-wake shows
+/// where it happened. Read over JTAG as `qz::platform::g_boot_trail`.
+enum class Phase : std::uint8_t {
+    kBoot = 1,
+    kPlatformReady,
+    kEpdBusyStart,
+    kEpdBusyEnd,
+    kWakeDone,
+    kSleepRequested,
+    kSleepRejected, ///< detail: bit31 = ESP_ERR_SLEEP_REJECT, bits 0..30 = wake pins at wake level
+                    ///< (RTC domain)
+    kSleepRetry,    ///< retrying with the timer only (detail: timer ms)
+    kSleepRetryRejected, ///< the timer-only retry was refused too (detail: esp_err_t)
+};
+void breadcrumb(Phase phase, std::int32_t detail = 0) noexcept;
+
 /// Owns all IDF-backed HAL objects (static storage). Created once in app_main.
 class IdfPlatform {
 public:
