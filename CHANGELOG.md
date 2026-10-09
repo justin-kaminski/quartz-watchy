@@ -14,6 +14,8 @@ gate in `docs/RELEASE.md` passes. The firmware version is `version.txt`.
   Switch off in Menu > Phone, or compile out with `CONFIG_QZ_PHONE=n` (the offline image has no
   Bluetooth at all).
 - Console: `weather push`, `phone forget`; flag U (USB only) for commands refused over the phone.
+- Five watch faces: Analog, Stacked, Words, Dashboard (seven-day step chart) and Day progress
+  (edge ring over the day with sunrise/sunset markers). New Giant digit font (Spleen 16x32 x4x3).
 
 ### Fixed
 - Taps made while the panel refreshed were lost; they are now latched and delivered.

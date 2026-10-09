@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstdint>
 #include <set>
 #include <string_view>
@@ -48,17 +49,20 @@ TEST(RegistryTest, IdsAreUniqueAndNamesNonEmptyAndUnique) {
 
 TEST(RegistryTest, IdsAreStablePersistedValues) {
     // These ids are stored in settings (`face`): changing one silently switches a user's face.
-    ASSERT_GE(descriptors().size(), 2U);
-    EXPECT_EQ(descriptors()[0].id, 0);
-    EXPECT_EQ(descriptors()[0].name, "default");
-    EXPECT_EQ(descriptors()[1].id, 1);
-    EXPECT_EQ(descriptors()[1].name, "minimal");
+    constexpr std::array<std::string_view, 7> kNames{
+        "default", "minimal", "analog", "stacked", "words", "dashboard", "progress"};
+    ASSERT_EQ(descriptors().size(), kNames.size());
+    for (std::size_t i = 0; i < kNames.size(); ++i) {
+        EXPECT_EQ(descriptors()[i].id, i);
+        EXPECT_EQ(descriptors()[i].name, kNames[i]);
+    }
 }
 
 TEST(RegistryTest, IsRegistered) {
     EXPECT_TRUE(is_registered(0));
     EXPECT_TRUE(is_registered(1));
-    EXPECT_FALSE(is_registered(2));
+    EXPECT_TRUE(is_registered(6));
+    EXPECT_FALSE(is_registered(7));
     EXPECT_FALSE(is_registered(255));
 }
 

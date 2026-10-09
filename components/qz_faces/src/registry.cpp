@@ -13,9 +13,14 @@ namespace {
 
 constexpr std::uint8_t kDefaultFaceId = 0;
 
-constexpr std::array<FaceDescriptor, 2> kTable{{
+constexpr std::array<FaceDescriptor, 7> kTable{{
     {kDefaultFaceId, "default", &render_default_face},
     {1, "minimal", &render_minimal_face},
+    {2, "analog", &render_analog_face},
+    {3, "stacked", &render_stacked_face},
+    {4, "words", &render_words_face},
+    {5, "dashboard", &render_dashboard_face},
+    {6, "progress", &render_progress_face},
 }};
 
 /// Descriptor for `id`; unknown ids fall back to the default face (row 0).

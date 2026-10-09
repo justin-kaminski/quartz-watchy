@@ -18,8 +18,8 @@ namespace {
 // gtest macros inflate the cognitive-complexity score of table-driven checks.
 // NOLINTBEGIN(readability-function-cognitive-complexity)
 
-constexpr std::array<FontId, 4> kAllFonts{
-    FontId::kSmall, FontId::kMedium, FontId::kLarge, FontId::kHuge};
+constexpr std::array<FontId, 5> kAllFonts{
+    FontId::kSmall, FontId::kMedium, FontId::kLarge, FontId::kHuge, FontId::kGiant};
 constexpr std::size_t kFontBudgetBytes = std::size_t{40} * 1024;
 
 [[nodiscard]] const Glyph& glyph_of(const Font& f, char32_t cp) {
@@ -93,10 +93,15 @@ TEST(FontsTest, UnknownIdFallsBackToSmall) {
 }
 
 TEST(FontsTest, FontsGrowInSize) {
-    int previous = 0;
+    // Each font is at least as tall as the previous one and has wider digits (kGiant matches
+    // kHuge's line height but doubles as a two-digits-per-row face font).
+    int previous_height = 0;
+    int previous_advance = 0;
     for (const FontId id : kAllFonts) {
-        EXPECT_GT(font(id).line_height, previous);
-        previous = font(id).line_height;
+        EXPECT_GE(font(id).line_height, previous_height);
+        EXPECT_GT(glyph_of(font(id), U'8').advance, previous_advance);
+        previous_height = font(id).line_height;
+        previous_advance = glyph_of(font(id), U'8').advance;
     }
 }
 

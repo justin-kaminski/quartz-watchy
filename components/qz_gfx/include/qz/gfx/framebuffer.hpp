@@ -66,7 +66,7 @@ struct Font {
 };
 
 /// Fonts compiled into the image (generated). Stable ids, used by faces and screens.
-enum class FontId : std::uint8_t { kSmall = 0, kMedium, kLarge, kHuge, kCount };
+enum class FontId : std::uint8_t { kSmall = 0, kMedium, kLarge, kHuge, kGiant, kCount };
 [[nodiscard]] const Font& font(FontId id) noexcept;
 
 enum class Align : std::uint8_t { kLeft, kCenter, kRight };

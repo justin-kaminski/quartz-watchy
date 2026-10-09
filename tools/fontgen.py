@@ -66,6 +66,16 @@ FONTS = (
         sx=3,
         sy=4,
     ),
+    # Stacked face: two digits per row. Spleen 16x32 digits scaled 4 (x) by 3 (y): advance 64 px,
+    # so "88" = 128 px; ink height ~66 px, two rows fit with room for status and date.
+    FontSpec(
+        "Giant",
+        "spleen-16x32.bdf",
+        tuple([ord(c) for c in " -0123456789"]),
+        ord(" "),
+        sx=4,
+        sy=3,
+    ),
 )
 
 

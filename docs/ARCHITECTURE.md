@@ -436,6 +436,12 @@ table in `qz_faces` (`faces::registry()`); setting `face` stores the stable nume
 weather when fresh/stale, sync indicator, time-invalid state, saver/charging marks. Adding a face
 = one file + one registry line + scenes + goldens (AGENTS skill).
 
+Registered faces (ids are persisted, never reused): 0 default, 1 minimal, 2 analog (dial and hands,
+info spread around the dial), 3 stacked (hours over minutes in the Giant digits), 4 words (time in
+words to the nearest five minutes), 5 dashboard (time plus a seven-day step chart), 6 progress (a
+ring along the edge fills over the day; sunrise/sunset from the saved location, integer solar
+approximation tested against published tables to within 5 min).
+
 ## 16. Console protocol v1
 
 Transport: USB-Serial-JTAG CDC (primary IDF console). Lines UTF-8, `\n`-terminated.

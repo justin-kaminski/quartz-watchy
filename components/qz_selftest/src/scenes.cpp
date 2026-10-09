@@ -157,6 +157,11 @@ void v_12h_am(WatchState& s, Settings& b) noexcept {
     v_12h_pm(s, b);
     s.local.time = {9, 5, 0};
 }
+void v_24h_location(WatchState& s, Settings& b) noexcept {
+    base(s, b); // sunrise/sunset on the progress face
+    set(b, Key::kLatitude, "41.77");
+    set(b, Key::kLongitude, "-88.15");
+}
 void v_time_invalid(WatchState& s, Settings& b) noexcept {
     base(s, b);
     s.time_valid = false;
@@ -418,6 +423,52 @@ constexpr auto kScenes = std::to_array<Scene>({
     {"face_minimal_sync_failed", ScreenId::kFace, &on_face<v_sync_failed, 1>, {}},
     {"face_minimal_power_saver", ScreenId::kFace, &on_face<v_power_saver, 1>, {}},
     {"face_minimal_charging", ScreenId::kFace, &on_face<v_charging, 1>, {}},
+    // analog face
+    {"face_analog_24h", ScreenId::kFace, &on_face<v_24h, 2>, {}},
+    {"face_analog_12h_pm", ScreenId::kFace, &on_face<v_12h_pm, 2>, {}},
+    {"face_analog_time_invalid", ScreenId::kFace, &on_face<v_time_invalid, 2>, {}},
+    {"face_analog_goal_met", ScreenId::kFace, &on_face<v_goal_met, 2>, {}},
+    {"face_analog_wx_stale", ScreenId::kFace, &on_face<v_wx_stale, 2>, {}},
+    {"face_analog_sync_failed", ScreenId::kFace, &on_face<v_sync_failed, 2>, {}},
+    {"face_analog_power_saver", ScreenId::kFace, &on_face<v_power_saver, 2>, {}},
+    {"face_analog_charging", ScreenId::kFace, &on_face<v_charging, 2>, {}},
+    // stacked face
+    {"face_stacked_24h", ScreenId::kFace, &on_face<v_24h, 3>, {}},
+    {"face_stacked_12h_pm", ScreenId::kFace, &on_face<v_12h_pm, 3>, {}},
+    {"face_stacked_time_invalid", ScreenId::kFace, &on_face<v_time_invalid, 3>, {}},
+    {"face_stacked_goal_met", ScreenId::kFace, &on_face<v_goal_met, 3>, {}},
+    {"face_stacked_wx_stale", ScreenId::kFace, &on_face<v_wx_stale, 3>, {}},
+    {"face_stacked_sync_failed", ScreenId::kFace, &on_face<v_sync_failed, 3>, {}},
+    {"face_stacked_power_saver", ScreenId::kFace, &on_face<v_power_saver, 3>, {}},
+    {"face_stacked_charging", ScreenId::kFace, &on_face<v_charging, 3>, {}},
+    // words face
+    {"face_words_24h", ScreenId::kFace, &on_face<v_24h, 4>, {}},
+    {"face_words_12h_pm", ScreenId::kFace, &on_face<v_12h_pm, 4>, {}},
+    {"face_words_time_invalid", ScreenId::kFace, &on_face<v_time_invalid, 4>, {}},
+    {"face_words_goal_met", ScreenId::kFace, &on_face<v_goal_met, 4>, {}},
+    {"face_words_wx_stale", ScreenId::kFace, &on_face<v_wx_stale, 4>, {}},
+    {"face_words_sync_failed", ScreenId::kFace, &on_face<v_sync_failed, 4>, {}},
+    {"face_words_power_saver", ScreenId::kFace, &on_face<v_power_saver, 4>, {}},
+    {"face_words_charging", ScreenId::kFace, &on_face<v_charging, 4>, {}},
+    // dashboard face
+    {"face_dashboard_24h", ScreenId::kFace, &on_face<v_24h, 5>, {}},
+    {"face_dashboard_12h_pm", ScreenId::kFace, &on_face<v_12h_pm, 5>, {}},
+    {"face_dashboard_time_invalid", ScreenId::kFace, &on_face<v_time_invalid, 5>, {}},
+    {"face_dashboard_goal_met", ScreenId::kFace, &on_face<v_goal_met, 5>, {}},
+    {"face_dashboard_wx_stale", ScreenId::kFace, &on_face<v_wx_stale, 5>, {}},
+    {"face_dashboard_sync_failed", ScreenId::kFace, &on_face<v_sync_failed, 5>, {}},
+    {"face_dashboard_power_saver", ScreenId::kFace, &on_face<v_power_saver, 5>, {}},
+    {"face_dashboard_charging", ScreenId::kFace, &on_face<v_charging, 5>, {}},
+    // progress face
+    {"face_progress_24h", ScreenId::kFace, &on_face<v_24h, 6>, {}},
+    {"face_progress_12h_pm", ScreenId::kFace, &on_face<v_12h_pm, 6>, {}},
+    {"face_progress_time_invalid", ScreenId::kFace, &on_face<v_time_invalid, 6>, {}},
+    {"face_progress_goal_met", ScreenId::kFace, &on_face<v_goal_met, 6>, {}},
+    {"face_progress_wx_stale", ScreenId::kFace, &on_face<v_wx_stale, 6>, {}},
+    {"face_progress_sync_failed", ScreenId::kFace, &on_face<v_sync_failed, 6>, {}},
+    {"face_progress_power_saver", ScreenId::kFace, &on_face<v_power_saver, 6>, {}},
+    {"face_progress_charging", ScreenId::kFace, &on_face<v_charging, 6>, {}},
+    {"face_progress_sun", ScreenId::kFace, &on_face<v_24h_location, 6>, {}},
     // system screens
     {"screen_steps_history", ScreenId::kStepsHistory, &s_base, {}},
     {"screen_weather_detail", ScreenId::kWeatherDetail, &s_base, {}},

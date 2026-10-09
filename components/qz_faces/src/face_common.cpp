@@ -389,4 +389,250 @@ draw_tag(Canvas& c, std::int16_t x, std::int16_t baseline_y, std::string_view te
     return w;
 }
 
+// ---- integer geometry -------------------------------------------------------------------------
+
+namespace {
+
+/// sin(d degrees) * 10000 for d = 0..90 (rounded; generated once, checked by faces_test).
+constexpr std::array<std::int16_t, 91> kSinDeg{
+    {0,    175,  349,  523,  698,  872,  1045, 1219, 1392, 1564, 1736, 1908, 2079, 2250, 2419, 2588,
+     2756, 2924, 3090, 3256, 3420, 3584, 3746, 3907, 4067, 4226, 4384, 4540, 4695, 4848, 5000, 5150,
+     5299, 5446, 5592, 5736, 5878, 6018, 6157, 6293, 6428, 6561, 6691, 6820, 6947, 7071, 7193, 7314,
+     7431, 7547, 7660, 7771, 7880, 7986, 8090, 8192, 8290, 8387, 8480, 8572, 8660, 8746, 8829, 8910,
+     8988, 9063, 9135, 9205, 9272, 9336, 9397, 9455, 9511, 9563, 9613, 9659, 9703, 9744, 9781, 9816,
+     9848, 9877, 9903, 9925, 9945, 9962, 9976, 9986, 9994, 9998, 10000}};
+
+constexpr std::int32_t kTenthsPerTurn = 3600;
+constexpr std::int32_t kTenthsQuarter = 900;
+
+/// sin for 0..900 tenths (first quadrant) with linear interpolation between whole degrees.
+std::int32_t sin_quadrant(std::int32_t t) noexcept {
+    const std::int32_t d = t / 10;
+    const std::int32_t frac = t % 10;
+    if (d >= 90) {
+        return kSinDeg[90];
+    }
+    const auto a = static_cast<std::int32_t>(kSinDeg[static_cast<std::size_t>(d)]);
+    const auto b = static_cast<std::int32_t>(kSinDeg[static_cast<std::size_t>(d + 1)]);
+    return a + round_div((b - a) * frac, 10);
+}
+
+} // namespace
+
+std::int32_t sin_e4(std::int32_t deg_tenths) noexcept {
+    std::int32_t t = deg_tenths % kTenthsPerTurn;
+    if (t < 0) {
+        t += kTenthsPerTurn;
+    }
+    if (t <= kTenthsQuarter) {
+        return sin_quadrant(t);
+    }
+    if (t <= 2 * kTenthsQuarter) {
+        return sin_quadrant((2 * kTenthsQuarter) - t);
+    }
+    if (t <= 3 * kTenthsQuarter) {
+        return -sin_quadrant(t - (2 * kTenthsQuarter));
+    }
+    return -sin_quadrant(kTenthsPerTurn - t);
+}
+
+std::int32_t cos_e4(std::int32_t deg_tenths) noexcept {
+    return sin_e4(deg_tenths + kTenthsQuarter);
+}
+
+void thick_line(Canvas& c,
+                std::int16_t x0,
+                std::int16_t y0,
+                std::int16_t x1,
+                std::int16_t y1,
+                std::int16_t width,
+                Color color) noexcept {
+    const auto r = static_cast<std::int16_t>(width / 2);
+    if (r <= 0) {
+        c.line(x0, y0, x1, y1, color);
+        return;
+    }
+    // Bresenham walk; a disc at every step. Faces draw a handful of short lines per minute.
+    std::int32_t x = x0;
+    std::int32_t y = y0;
+    const std::int32_t dx = x1 > x0 ? x1 - x0 : x0 - x1;
+    const std::int32_t dy = y1 > y0 ? -(y1 - y0) : -(y0 - y1);
+    const std::int32_t sx = x0 < x1 ? 1 : -1;
+    const std::int32_t sy = y0 < y1 ? 1 : -1;
+    std::int32_t err = dx + dy;
+    for (;;) {
+        c.circle(static_cast<std::int16_t>(x), static_cast<std::int16_t>(y), r, true, color);
+        if (x == x1 && y == y1) {
+            break;
+        }
+        const std::int32_t e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y += sy;
+        }
+    }
+}
+
+TextBuf<8> format_steps(std::uint32_t steps) noexcept {
+    constexpr std::uint32_t kMaxShown = 99999;
+    TextBuf<8> out;
+    out.put_uint(steps > kMaxShown ? kMaxShown : steps);
+    if (steps > kMaxShown) {
+        out.put_char('+');
+    }
+    return out;
+}
+
+std::int16_t draw_weather_compact(Canvas& c,
+                                  std::int16_t x,
+                                  std::int16_t y_top,
+                                  const ui::WatchState& s,
+                                  const gfx::Font& f) noexcept {
+    if (!weather_visible(s)) {
+        return 0;
+    }
+    constexpr std::int16_t kGap = 3;
+    draw_weather_icon(c, x, y_top, s.weather.condition);
+    const auto base =
+        static_cast<std::int16_t>(y_top + ((layout::kWeatherIconSize + f.ascent) / 2));
+    auto tx = static_cast<std::int16_t>(x + layout::kWeatherIconSize + kGap);
+    const std::int16_t adv =
+        c.text(tx, base, format_temp(s.weather.temp_dc, s.temp_unit).view(), f, Color::kBlack);
+    tx = static_cast<std::int16_t>(tx + adv);
+    if (s.weather_freshness == model::WeatherFreshness::kStale) {
+        for (std::int16_t dx = 0; dx < adv; dx = static_cast<std::int16_t>(dx + 2)) {
+            c.pixel(static_cast<std::int16_t>(tx - adv + dx),
+                    static_cast<std::int16_t>(base + 2),
+                    Color::kBlack);
+        }
+        tx = static_cast<std::int16_t>(tx + kGap);
+        tx = static_cast<std::int16_t>(tx + c.text(tx,
+                                                   base,
+                                                   format_age(s.weather_age_s).view(),
+                                                   gfx::font(FontId::kSmall),
+                                                   Color::kBlack));
+    }
+    return static_cast<std::int16_t>(tx - x);
+}
+
+// ---- status row / sun -------------------------------------------------------------------------
+
+std::int16_t
+draw_status_row(Canvas& c, const ui::WatchState& s, std::int16_t y, std::int16_t inset) noexcept {
+    constexpr std::int16_t kGap = 4;
+    const gfx::Font& small = gfx::font(FontId::kSmall);
+    const auto base = static_cast<std::int16_t>(y + 11);
+    auto x = inset;
+    const std::string_view tag = power_tag(s.power);
+    if (!tag.empty()) {
+        x = static_cast<std::int16_t>(x + draw_tag(c, x, base, tag) + kGap);
+    }
+    draw_battery_icon(c, x, static_cast<std::int16_t>(y + 1), s.battery);
+    x = static_cast<std::int16_t>(x + layout::kBatteryIconW + kGap);
+    x = static_cast<std::int16_t>(
+        x + c.text(x, base, format_battery(s.battery).view(), small, Color::kBlack) + kGap);
+    draw_sync_icon(
+        c, static_cast<std::int16_t>(gfx::kWidth - inset - layout::kSyncIconSize), y, s.sync);
+    return x;
+}
+
+namespace {
+
+constexpr std::int32_t kSecondsPerDay = 86'400;
+constexpr std::int32_t kMinutesPerDay = 1440;
+constexpr std::int32_t kE5PerTenth = 10'000; ///< 1e-5 degrees per 0.1 degree
+
+/// Largest t in [0, 1800] tenths with cos_e4(t) >= value (cos falls monotonically there).
+std::int32_t acos_tenths(std::int32_t value_e4) noexcept {
+    std::int32_t lo = 0;
+    std::int32_t hi = 1800;
+    while (lo < hi) {
+        const std::int32_t mid = (lo + hi + 1) / 2;
+        if (cos_e4(mid) >= value_e4) {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return lo;
+}
+
+std::int32_t wrap_minutes(std::int32_t seconds) noexcept {
+    std::int32_t s = seconds % kSecondsPerDay;
+    if (s < 0) {
+        s += kSecondsPerDay;
+    }
+    return (s + 30) / 60 % kMinutesPerDay;
+}
+
+} // namespace
+
+SunTimes sun_times(const time::LocalDateTime& local, model::Location where) noexcept {
+    const time::DayNumber jan1 = time::days_from_civil({local.date.year, 1, 1});
+    const auto n = static_cast<std::int32_t>(time::days_from_civil(local.date) - jan1) + 1;
+    // B = 360/365 * (N - 81) degrees, in tenths.
+    const std::int32_t b = 3600 * (n - 81) / 365;
+    const std::int32_t sin_b = sin_e4(b);
+    const std::int32_t cos_b = cos_e4(b);
+    const std::int32_t sin_2b = sin_e4(2 * b);
+    // Equation of time (minutes) = 9.87 sin 2B - 7.53 cos B - 1.5 sin B; here in seconds.
+    const std::int64_t eot_s =
+        ((987LL * sin_2b) - (753LL * cos_b) - (150LL * sin_b)) * 60 / (100LL * kTrigOne);
+    // Declination = 23.44 deg * sin B, in tenths.
+    const auto decl = static_cast<std::int32_t>((2344LL * sin_b) / (10LL * kTrigOne));
+    const std::int32_t lat = where.lat_e5 / kE5PerTenth;
+    // cos w0 = (sin(-0.833 deg) - sin(lat) sin(decl)) / (cos(lat) cos(decl))
+    const std::int64_t num = (static_cast<std::int64_t>(sin_e4(-8)) * kTrigOne) -
+                             (static_cast<std::int64_t>(sin_e4(lat)) * sin_e4(decl));
+    const std::int64_t den = static_cast<std::int64_t>(cos_e4(lat)) * cos_e4(decl);
+    SunTimes out;
+    if (den <= 0) {
+        out.kind = SunTimes::Kind::kPolarNight; // a pole: never a normal day
+        return out;
+    }
+    const std::int64_t cos_w0 = num * kTrigOne / den;
+    if (cos_w0 >= kTrigOne) {
+        out.kind = SunTimes::Kind::kPolarNight;
+        return out;
+    }
+    if (cos_w0 <= -kTrigOne) {
+        out.kind = SunTimes::Kind::kPolarDay;
+        return out;
+    }
+    const std::int32_t w0 = acos_tenths(static_cast<std::int32_t>(cos_w0)); // tenths of a degree
+    // Solar noon (UTC s) = 12 h - longitude * 240 s/deg - EoT; one degree of hour angle = 240 s.
+    const std::int64_t noon_utc =
+        43'200 - (static_cast<std::int64_t>(where.lon_e5) * 240 / 100'000) - eot_s;
+    const std::int64_t half_day = static_cast<std::int64_t>(w0) * 24;
+    out.rise_min =
+        wrap_minutes(static_cast<std::int32_t>(noon_utc - half_day + local.utc_offset_s));
+    out.set_min = wrap_minutes(static_cast<std::int32_t>(noon_utc + half_day + local.utc_offset_s));
+    return out;
+}
+
+TextBuf<8> format_clock_minutes(std::int32_t minutes, model::HourFormat fmt) noexcept {
+    const std::int32_t m = ((minutes % kMinutesPerDay) + kMinutesPerDay) % kMinutesPerDay;
+    std::int32_t h = m / 60;
+    const std::int32_t mm = m % 60;
+    TextBuf<8> out;
+    const bool twelve = fmt == model::HourFormat::k12h;
+    const bool pm = h >= 12;
+    if (twelve) {
+        h %= 12;
+        h = h == 0 ? 12 : h;
+    }
+    out.put_uint(static_cast<std::uint64_t>(h));
+    out.put_char(':');
+    out.put_char(static_cast<char>('0' + (mm / 10)));
+    out.put_char(static_cast<char>('0' + (mm % 10)));
+    if (twelve) {
+        out.put_char(pm ? 'p' : 'a');
+    }
+    return out;
+}
+
 } // namespace qz::faces

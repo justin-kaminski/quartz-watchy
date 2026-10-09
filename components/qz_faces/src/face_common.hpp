@@ -133,7 +133,58 @@ draw_tag(gfx::Canvas& c, std::int16_t x, std::int16_t baseline_y, std::string_vi
 /// True when the weather block may be shown (valid report, freshness not hidden).
 [[nodiscard]] bool weather_visible(const ui::WatchState& s) noexcept;
 
+// ---- integer geometry (faces added 2026-10: analog, progress) ----
+
+inline constexpr std::int32_t kTrigOne = 10'000; ///< fixed-point scale of sin_e4 / cos_e4
+/// sin(deg_tenths / 10 degrees) * 10000, rounded; any angle (wraps). Table + linear interpolation,
+/// error < 1e-4.
+[[nodiscard]] std::int32_t sin_e4(std::int32_t deg_tenths) noexcept;
+[[nodiscard]] std::int32_t cos_e4(std::int32_t deg_tenths) noexcept;
+/// Line of the given width (round caps): a filled disc of radius width/2 swept along the segment.
+void thick_line(gfx::Canvas& c,
+                std::int16_t x0,
+                std::int16_t y0,
+                std::int16_t x1,
+                std::int16_t y1,
+                std::int16_t width,
+                gfx::Color color = gfx::Color::kBlack) noexcept;
+
+/// "6240" / "99999+" (steps today, capped for narrow layouts).
+[[nodiscard]] TextBuf<8> format_steps(std::uint32_t steps) noexcept;
+
+/// Compact weather: 20x20 icon at (x, y_top), the temperature in `f` to its right, and when stale
+/// a dotted underline plus "Nh old" in the small font. Draws nothing unless weather_visible().
+/// Returns the width used (0 when nothing was drawn).
+std::int16_t draw_weather_compact(gfx::Canvas& c,
+                                  std::int16_t x,
+                                  std::int16_t y_top,
+                                  const ui::WatchState& s,
+                                  const gfx::Font& f) noexcept;
+
+/// Status row used by the newer faces: [power tag] battery icon + "87%" at the left, the sync glyph
+/// at the right, all within y..y+15. Returns the x where the free middle starts.
+std::int16_t draw_status_row(gfx::Canvas& c,
+                             const ui::WatchState& s,
+                             std::int16_t y,
+                             std::int16_t inset = layout::kMargin) noexcept;
+
+/// Sunrise / sunset in local minutes of the day (NOAA-style approximation in integer arithmetic,
+/// typically within a few minutes below the polar circles).
+struct SunTimes {
+    enum class Kind : std::uint8_t { kNormal = 0, kPolarDay, kPolarNight } kind = Kind::kNormal;
+    std::int32_t rise_min = 0; ///< 0..1439, local time (kNormal only)
+    std::int32_t set_min = 0;
+};
+[[nodiscard]] SunTimes sun_times(const time::LocalDateTime& local, model::Location where) noexcept;
+/// "7:02" / "18:31" from minutes of the day, honoring the 12/24 h setting ("6:31p" in 12 h).
+[[nodiscard]] TextBuf<8> format_clock_minutes(std::int32_t minutes, model::HourFormat fmt) noexcept;
+
 void render_default_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
 void render_minimal_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
+void render_analog_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
+void render_stacked_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
+void render_words_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
+void render_dashboard_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
+void render_progress_face(const ui::WatchState& state, gfx::Canvas& canvas) noexcept;
 
 } // namespace qz::faces

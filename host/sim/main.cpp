@@ -3,7 +3,8 @@
 // Renders one watch face for a scripted state to a PNG, using the real qz_time zone engine, the
 // real face registry and the real framebuffer PNG encoder. No device, no ESP-IDF.
 //
-//   qz_sim --face default|minimal --time 2026-10-06T08:15:00 --tz America/Chicago
+//   qz_sim --face default|minimal|analog|stacked|words|dashboard|progress
+//          --time 2026-10-06T08:15:00 --tz America/Chicago
 //          --hour-format 12|24 --steps 7421 --goal 10000 --battery 76 [--charging]
 //          [--power normal|low|saver|critical] --weather 'temp_c=18,code=61,age_min=20'
 //          [--sync ok|never|failed|stale] [--time-invalid] [--utc] --scale 1|2|3 --out face.png

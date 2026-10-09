@@ -14,7 +14,8 @@ namespace {
 
 constexpr std::string_view kUsage =
     "usage: qz_sim [options]\n"
-    "  --face NAME            registered face (default|minimal), default: default\n"
+    "  --face NAME            registered face "
+    "(default|minimal|analog|stacked|words|dashboard|progress), default: default\n"
     "  --time YYYY-MM-DDTHH:MM:SS  local wall time (default 2026-10-06T08:15:00)\n"
     "  --utc                  interpret --time as UTC and convert to local\n"
     "  --time-invalid         face shows the clock-not-set state\n"

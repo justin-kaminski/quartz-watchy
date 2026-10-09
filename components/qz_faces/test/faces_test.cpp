@@ -399,6 +399,91 @@ TEST(FacesTest, StepsGoalBarFillsProportionally) {
 
 // ---- formatting helpers --------------------------------------------------------------------
 
+TEST(FacesTest, NewFacesTimeDigitsAreAtLeast48PixelsTall) {
+    // Stacked and dashboard/progress use digits; analog and words are exempt by design (hands /
+    // words), the rule is about digit legibility.
+    const ui::WatchState s = typical_state();
+    for (const std::size_t index : {3U, 5U, 6U}) {
+        const gfx::Framebuffer fb = render(descriptors()[index], s);
+        const Ink ink = ink_in_rows(fb, 20, 100);
+        EXPECT_GE(ink.height(), layout::kMinTimeDigitPx) << descriptors()[index].name;
+    }
+}
+
+TEST(FacesTest, AnalogHandsMoveWithTheMinute) {
+    ui::WatchState a = typical_state();
+    ui::WatchState b = a;
+    b.local.time.minute = static_cast<std::uint8_t>((a.local.time.minute + 15) % 60);
+    EXPECT_NE(render(descriptors()[2], a).bits, render(descriptors()[2], b).bits);
+}
+
+TEST(FacesTest, WordsRoundToTheNearestFiveMinutes) {
+    ui::WatchState a = typical_state();
+    a.local.time = {16, 13, 0}; // "quarter past four"
+    ui::WatchState b = a;
+    b.local.time = {16, 17, 0}; // also "quarter past four": only the exact footer differs
+    const gfx::Framebuffer fa = render(descriptors()[4], a);
+    const gfx::Framebuffer fb = render(descriptors()[4], b);
+    EXPECT_EQ(ink_in_rows(fa, 20, 150).count, ink_in_rows(fb, 20, 150).count);
+    b.local.time = {16, 18, 0}; // "twenty past four"
+    EXPECT_NE(ink_in_rows(fa, 20, 150).count,
+              ink_in_rows(render(descriptors()[4], b), 20, 150).count);
+}
+
+TEST(FacesGeometry, SineTableMatchesKnownValues) {
+    EXPECT_EQ(sin_e4(0), 0);
+    EXPECT_EQ(sin_e4(300), 5000);
+    EXPECT_EQ(sin_e4(900), 10000);
+    EXPECT_EQ(sin_e4(1800), 0);
+    EXPECT_EQ(sin_e4(2700), -10000);
+    EXPECT_EQ(sin_e4(-900), -10000);
+    EXPECT_EQ(cos_e4(0), 10000);
+    EXPECT_EQ(cos_e4(600), 5000);
+    EXPECT_NEAR(sin_e4(455), 7133, 2); // sin 45.5 deg = 0.71325, interpolated
+}
+
+TEST(FacesGeometry, SunTimesMatchPublishedTablesWithinFiveMinutes) {
+    struct Case {
+        time::CivilDate date;
+        std::int32_t offset_s;
+        model::Location where;
+        std::int32_t rise;
+        std::int32_t set;
+    };
+    // NOAA solar calculator values, local clock time.
+    const Case cases[] = {
+        {{2026, 6, 21},
+         -5 * 3600,
+         {4'188'113, -8'762'980},
+         (5 * 60) + 15,
+         (20 * 60) + 29}, // Chicago
+        {{2026, 12, 21}, -6 * 3600, {4'188'113, -8'762'980}, (7 * 60) + 15, (16 * 60) + 22},
+        {{2026, 3, 20}, 0, {5'150'740, -12'780}, (6 * 60) + 3, (18 * 60) + 15}, // London
+        {{2026, 9, 23},
+         10 * 3600,
+         {-3'386'880, 15'120'930},
+         (5 * 60) + 45,
+         (17 * 60) + 51}, // Sydney
+    };
+    for (const Case& c : cases) {
+        time::LocalDateTime local;
+        local.date = c.date;
+        local.utc_offset_s = c.offset_s;
+        const SunTimes sun = sun_times(local, c.where);
+        ASSERT_EQ(sun.kind, SunTimes::Kind::kNormal);
+        EXPECT_NEAR(sun.rise_min, c.rise, 5) << c.date.month << "/" << int{c.date.day};
+        EXPECT_NEAR(sun.set_min, c.set, 5) << c.date.month << "/" << int{c.date.day};
+    }
+}
+
+TEST(FacesGeometry, SunTimesReportPolarDayAndNight) {
+    time::LocalDateTime local;
+    local.date = {2026, 6, 21};
+    EXPECT_EQ(sun_times(local, {8'000'000, 0}).kind, SunTimes::Kind::kPolarDay);
+    local.date = {2026, 12, 21};
+    EXPECT_EQ(sun_times(local, {8'000'000, 0}).kind, SunTimes::Kind::kPolarNight);
+}
+
 TEST(FacesFormatTest, RoundDivRoundsHalfUpAndNeverNegativeZero) {
     EXPECT_EQ(round_div(14, 10), 1);
     EXPECT_EQ(round_div(15, 10), 2);
