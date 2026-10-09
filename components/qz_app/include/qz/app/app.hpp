@@ -24,6 +24,7 @@ struct BuildFeatures {
     bool radio = true;    ///< CONFIG_QZ_RADIO
     bool usb_wake = true; ///< CONFIG_QZ_USB_WAKE (EXT0 on USB detect)
     bool selftest_interactive = true;
+    bool phone = true; ///< CONFIG_QZ_PHONE (Bluetooth phone sync)
 };
 
 /// Every hardware dependency, owned by main/ (or the simulator / tests).
@@ -41,6 +42,7 @@ struct Platform {
     hal::ConsolePort& console;
     hal::NetStack* net;              ///< nullptr when the radio is compiled out
     hal::ProvisioningPortal* portal; ///< nullptr when the radio is compiled out
+    hal::PhoneLink* phone = nullptr; ///< nullptr when the phone link is compiled out
 };
 
 /// Pure state machine deciding whether the console may run (ARCHITECTURE.md section 17).

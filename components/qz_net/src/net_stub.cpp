@@ -25,3 +25,17 @@ hal::ProvisioningPortal* provisioning_portal() noexcept {
 } // namespace qz::net
 
 #endif // !CONFIG_QZ_RADIO
+
+#ifndef CONFIG_QZ_PHONE
+
+#include "qz/net/idf_net.hpp"
+
+namespace qz::net {
+
+hal::PhoneLink* phone_link() noexcept {
+    return nullptr;
+}
+
+} // namespace qz::net
+
+#endif // !CONFIG_QZ_PHONE

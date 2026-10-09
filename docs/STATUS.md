@@ -37,7 +37,15 @@ timer-only before restarting. Confirmed by the owner: per-minute partial updates
 Second finding: taps were lost while the firmware waited on the panel (0.5-2 s) or on a 250 ms tethered console slice.
 Light sleep now always arms released buttons and latches them (`BoardIo::take_latched_buttons`, new HAL method;
 `GestureRecognizer::sample` takes the latch and turns an unseen tap into a Click); the tethered slice is 25 ms.
-Still to verify on hardware: the tap-latch fix, panel look (ghosting, flicker), sleep current (B9).
+Still to verify on hardware: panel look (ghosting, flicker), sleep current (B9). The tap-latch fix was confirmed by the
+owner (2026-10-07).
+
+## Phone sync (branch feat/phone-sync, 2026-10-09)
+Bluetooth LE link to `web/phone/index.html` (ARCHITECTURE section 13a, D-29). Host-tested end to end against
+`FakePhoneLink` (menu start, pairing code on the panel, commands, USB-only refusals, every way a session ends, off means
+off, factory reset forgets bonds); both firmware images build, the offline image has no Bluetooth symbols. The NimBLE
+link itself (`components/qz_net/src/phone_link.cpp`) is build-verified only: bring-up B13. Not built: scheduled syncs
+(a browser page cannot run in the background; needs a native app or Gadgetbridge first).
 
 ## Work packages
 | WP | State |
@@ -82,6 +90,9 @@ FIRST FLASH IS POSSIBLE (flash the OFFLINE image first, see docs/FIRST_FLASH.md;
 - Agents must use <= 60 tool calls and read only their sections (AGENTS.md "Working efficiently"); WP-11 (42 calls) shows it works.
 
 ## Tech debt / follow-ups
+- [TECH-DEBT] Phone link [ASSUMED] until B13: NimBLE re-registers the GATT service after each nimble_port_deinit/init
+  cycle; Android pairs on the watch's security request before the page touches the characteristics; notify chunking
+  keeps up with a 16 KiB `display dump`; advertising/connected current (B9 setup).
 - [TECH-DEBT] `FixedString(const char*)` documents truncation as a programmer error but clears silently (WP-01).
 - [TECH-DEBT] `QZ_LOGW` ignores `QZ_LOG_MAX_LEVEL`; there is no `QZ_LOGV` (WP-01).
 - [TECH-DEBT] Header contract vs panel vendor guidance (P-05) and the partial-refresh waveform (P-11) are open until bring-up experiment E1.

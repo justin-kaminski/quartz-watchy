@@ -27,4 +27,9 @@ inline constexpr std::int64_t kProvisionTimeoutUs =
 inline constexpr std::size_t kTokenLength = 10;
 inline constexpr std::size_t kDecodeBufBytes = 128; ///< decoded size of any single field
 
+// ---- phone sync (section 13a) ----
+inline constexpr std::int64_t kPhoneConnectWindowUs = std::int64_t{120} * 1'000'000; ///< [TUNE]
+inline constexpr std::int64_t kPhoneIdleUs = std::int64_t{120} * 1'000'000;          ///< [TUNE]
+inline constexpr std::int64_t kPhoneMaxUs = std::int64_t{15} * 60 * 1'000'000; ///< = session cap
+
 } // namespace qz::conn::tuning

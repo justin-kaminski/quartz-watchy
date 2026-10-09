@@ -152,7 +152,7 @@ constexpr auto kCommands = std::to_array<Command>({
      "run a sync session immediately",
      0,
      1,
-     kFlagNeedsRadio,
+     kFlagNeedsRadio | kFlagUsbOnly,
      sync_now},
     {"sync status",
      "sync status",
@@ -166,7 +166,7 @@ constexpr auto kCommands = std::to_array<Command>({
      "start the phone provisioning access point",
      0,
      0,
-     kFlagNeedsRadio,
+     kFlagNeedsRadio | kFlagUsbOnly,
      provision_start},
     {"provision stop", "provision stop", "stop provisioning", 0, 0, kFlagNone, provision_stop},
 });

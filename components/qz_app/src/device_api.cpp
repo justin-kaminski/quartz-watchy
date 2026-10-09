@@ -242,6 +242,21 @@ Status Core::fake_weather(const model::WeatherReport& report) {
     return ok();
 }
 
+Status Core::push_weather(const model::WeatherReport& report) {
+    rtc_.weather = report;
+    rtc_.weather.valid = 1;
+    rtc_.weather.faked = 0;
+    commit_all();
+    return ok();
+}
+
+Status Core::forget_phones() {
+    if (!phone_compiled()) {
+        return Errc::kUnsupported;
+    }
+    return p_.phone->forget_bonds();
+}
+
 Status Core::clear_weather() {
     rtc_.weather = model::WeatherReport{};
     commit_all();

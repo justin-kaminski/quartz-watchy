@@ -64,4 +64,37 @@ public:
     virtual void stop() = 0;
 };
 
+/// Phone link state. Commands flow only in kSecure (encrypted, MITM-authenticated, bonded).
+enum class PhoneLinkState : std::uint8_t {
+    kOff = 0,     ///< stack down (no radio power)
+    kAdvertising, ///< discoverable, no phone connected
+    kPairing,     ///< connected, not yet secure; passkey() is set while the phone asks for it
+    kSecure,      ///< encrypted + authenticated: request lines are delivered
+};
+
+/// Bluetooth LE link to the companion page (ARCHITECTURE.md section 13a). Carries the console
+/// line protocol (section 16) over a serial-style GATT service. One phone at a time; bonds persist
+/// so pairing happens once. Implemented by qz_net (NimBLE) and qz_testkit (FakePhoneLink); the app
+/// holds nullptr when CONFIG_QZ_PHONE=n. Not thread-safe except state()/passkey().
+class PhoneLink {
+public:
+    virtual ~PhoneLink() = default;
+    /// Brings the BLE stack up and advertises as `name`. Increments radio_init_count().
+    virtual Status start(std::string_view name) = 0;
+    /// Disconnects, stops advertising and powers the stack down. Idempotent.
+    virtual void stop() = 0;
+    [[nodiscard]] virtual PhoneLinkState state() const = 0;
+    /// Six-digit passkey to show on the watch while pairing; 0 when none is pending.
+    [[nodiscard]] virtual std::uint32_t passkey() const = 0;
+    /// Next complete request line from a secure link (without '\n'); 0 = timeout. kNoSpace if
+    /// the line was too long (it is discarded). Waits without light sleep (the link needs the
+    /// radio clock).
+    virtual Result<std::size_t> receive_line(std::span<char> out, std::uint32_t timeout_ms) = 0;
+    /// Sends one line plus '\n' to the connected phone; dropped when not kSecure.
+    virtual void send_line(std::string_view line) = 0;
+    /// Deletes every stored bond (the next phone must pair again).
+    virtual Status forget_bonds() = 0;
+    [[nodiscard]] virtual std::uint32_t radio_init_count() const = 0;
+};
+
 } // namespace qz::hal

@@ -142,6 +142,18 @@ Menu > Connectivity > Setup Wi-Fi. Join the SSID shown with the password shown, 
 Wait 5 min without submitting: the AP must stop by itself.
 Report: pass/fail, phone model/browser, anything confusing on the page.
 
+## B13 Phone sync (radio image)
+Needs Chrome on Android (or desktop Chrome) and the page from `web/phone/` served over https (see
+`web/phone/README.md`). On the watch: Menu > Phone > Sync with phone. On the phone: open the page,
+Connect, pick `Quartz-XXXX`, type the six digits the watch shows when the phone asks. Expect: the
+sync list shows Time, Time zone and Weather done (Weather needs a location: "Use this phone's
+location"); the watch face shows the phone's time; changing a setting on the page changes the watch.
+Then: tap Done -> the watch shows "Sync complete" and its Bluetooth is off. Start again: no code is
+asked this time (bonded). Start once more and do nothing: after 2 min the watch says it stopped.
+Run three sessions in a row (stack re-initialization).
+Report: pass/fail per item, phone model, anything confusing, and (with a profiler, B9 setup) the
+current while waiting for the phone and while connected.
+
 ## Reporting
 Create `docs/bringup/YYYY-MM-DD.md` with one section per step: pass/fail, pasted outputs, measured
 numbers, photos (in `docs/bringup/img/`). Agents read that file to update [TUNE]/[ASSUMED] items.

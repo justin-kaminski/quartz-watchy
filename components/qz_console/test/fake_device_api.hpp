@@ -164,6 +164,19 @@ public:
         weather_ = WeatherInfo{};
         return ok();
     }
+    Status push_weather(const model::WeatherReport& report) override {
+        QZ_RETURN_IF_ERROR(gate());
+        weather_.report = report;
+        weather_.freshness = model::WeatherFreshness::kFresh;
+        weather_.age_s = 0;
+        return ok();
+    }
+    Status forget_phones() override {
+        QZ_RETURN_IF_ERROR(gate());
+        ++phones_forgotten;
+        return ok();
+    }
+    int phones_forgotten = 0;
     [[nodiscard]] std::optional<FixedString<32>> wifi_ssid() const override { return ssid_; }
     [[nodiscard]] bool wifi_has_password() const override { return wifi_password_stored; }
     Status set_wifi(std::string_view ssid, std::string_view password) override {

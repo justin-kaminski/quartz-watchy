@@ -234,7 +234,8 @@ std::string_view run(DeviceApi& api,
 Dispatcher::Dispatcher(const Registry& registry, DeviceApi& api, bool radio_compiled) noexcept
     : registry_(registry), api_(api), radio_compiled_(radio_compiled) {}
 
-std::string_view Dispatcher::handle_line(std::span<char> line, std::span<char> response) noexcept {
+std::string_view
+Dispatcher::handle_line(std::span<char> line, std::span<char> response, Origin origin) noexcept {
     const std::span<char> out = response.first(std::min(response.size(), kMaxResponseBytes));
     Request request;
     const ParseFailure failure = detail::parse_line(line, request);
@@ -253,6 +254,11 @@ std::string_view Dispatcher::handle_line(std::span<char> line, std::span<char> r
         return reply_error(out, id, Errc::kUnknownCommand, "unknown command, try help");
     }
     const std::span<const std::string_view> args = request.tokens.span().subspan(words);
+    if (origin == Origin::kPhone && has_flag(*command, kFlagUsbOnly)) {
+        log_rejected("usb only");
+        scrub(line);
+        return reply_error(out, id, Errc::kUnsupported, "USB console only");
+    }
     log_request(id, *command, args);
     const std::string_view reply = run(api_, *command, args, radio_compiled_, id, out);
     if (has_flag(*command, kFlagSensitive)) {

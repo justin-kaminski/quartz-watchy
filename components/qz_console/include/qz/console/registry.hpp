@@ -19,7 +19,12 @@ enum CommandFlag : std::uint8_t {
     kFlagSensitive = 1U << 0U,   ///< arguments never logged/echoed; history disabled
     kFlagDestructive = 1U << 1U, ///< requires a literal "confirm" or is listed as D in docs
     kFlagNeedsRadio = 1U << 2U,  ///< kUnsupported when the radio is compiled out
+    kFlagUsbOnly = 1U << 3U,     ///< refused over the phone link (restarts, long blocking runs)
 };
+
+/// Where a request line came from. The phone link is authenticated but remote: commands that
+/// restart the watch, block it for long or touch the Wi-Fi radio stay on the USB console.
+enum class Origin : std::uint8_t { kUsb = 0, kPhone };
 
 /// Handler writes its result fields into an already-open JSON object.
 using Handler = Status (*)(DeviceApi& api, std::span<const std::string_view> args, JsonWriter& out);
@@ -57,7 +62,9 @@ Status register_builtin_commands(Registry& registry) noexcept;
 class Dispatcher {
 public:
     Dispatcher(const Registry& registry, DeviceApi& api, bool radio_compiled) noexcept;
-    std::string_view handle_line(std::span<char> line, std::span<char> response) noexcept;
+    std::string_view handle_line(std::span<char> line,
+                                 std::span<char> response,
+                                 Origin origin = Origin::kUsb) noexcept;
 
 private:
     const Registry& registry_;

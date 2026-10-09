@@ -22,6 +22,7 @@ owner runs `docs/HARDWARE_BRINGUP.md`.
 11. [Battery and power policy](#11-battery-and-power-policy)
 12. [Connectivity and weather](#12-connectivity-and-weather)
 13. [Provisioning, credentials, security](#13-provisioning-credentials-security)
+    13a. [Phone sync (Bluetooth LE)](#13a-phone-sync-bluetooth-le)
 14. [Display refresh policy](#14-display-refresh-policy)
 15. [UI model](#15-ui-model)
 16. [Console protocol v1](#16-console-protocol-v1)
@@ -360,6 +361,29 @@ At-rest encryption trade-off (owner decision, OPEN_QUESTIONS Q-04): v1 default *
   complicates recovery; development mode is not a security feature. Not recommended for a
   hobby-serviceable watch.
 
+## 13a. Phone sync (Bluetooth LE)
+
+On-demand link to a companion web page (`web/phone/index.html`, Web Bluetooth in Chrome on Android
+or desktop). DECISIONS D-29. The page sets the time and zone from the phone, edits settings and the
+face, pushes weather it fetched from Open-Meteo itself (so the watch needs no Wi-Fi), and can store
+Wi-Fi credentials.
+
+| Aspect | Rule |
+|---|---|
+| Start | Only from the watch: Menu > Phone > Sync with phone. Never scheduled, never on a timer. |
+| Radio | NimBLE peripheral (`hal::PhoneLink`, qz_net). Initialized at session start, fully deinitialized at the end. While up, IdfSleep polls instead of light-sleeping (the link needs the radio clock); buttons are sampled every 25 ms. |
+| Session end (`conn::PhoneSession`) | no secure connection within 120 s; 120 s without a command; the phone disconnects; 15 min hard cap; BACK; the setting turned off; the end of the wake. Each one powers the stack down. |
+| Security | DisplayOnly IO capability, LE Secure Connections, MITM, bonding (NVS, `nimble_bond`, max 4). The watch requests security on connect; the six-digit passkey (esp_random, radio on) is shown on the e-paper only. Both characteristics require an encrypted, authenticated link; writes before that are refused. Failed pairing disconnects. |
+| Transport | Nordic-UART-style service `6E400001-...`, RX write `...0002`, TX notify `...0003`. Lines of section 16 unchanged; responses are notified in MTU-sized chunks. |
+| Permissions | `console::Origin::kPhone`: commands flagged U (USB only: `reboot`, `sleep`, `factory-reset`, `selftest run`, `sync now`, `weather fetch`, `provision start`) answer `unsupported` without running. Everything else, `wifi set` included, is allowed over the secure link. |
+| Off means off | Setting `phone` (default on: costs nothing until started). Off: the Phone list only shows the switch and the stack is never initialized. Compile-out: `CONFIG_QZ_PHONE` (depends on NimBLE; the offline image has no Bluetooth, checked by `tools/check_offline.sh`). |
+| Concurrency | One radio session at a time: phone sync, provisioning and Wi-Fi syncs refuse each other with `busy`. |
+| Forget | Menu > Phone > Forget phones, console `phone forget`, and factory reset erase all bonds. |
+
+Weather pushed by the page (`weather push <temp_dc> <code> <hi> <lo> [observed_unix]`) is stored as
+a real report (not `faked`); the observation time must be at most 6 h old and at most 5 min ahead
+of the watch clock.
+
 ## 14. Display refresh policy
 
 | Rule | Value |
@@ -386,7 +410,7 @@ BACK+UP together is never interpreted (hardware reset chord, section 5).
 |---|---|---|---|---|
 | Face | active face (section 15.1) | Up: steps 7-day; Down: weather detail | open Menu | full refresh |
 | StepsHistory / WeatherDetail | 7-day bars + goal / temp, hi/lo, condition, age | — | — | face |
-| Menu | Time & date, Time zone, 12/24h, Units, Connectivity, Weather, Sync now, Step goal, Vibration, Watch face, Diagnostics, About, Factory reset | move (wrap) | enter | face |
+| Menu | Time & date, Time zone, 12/24h, Units, Connectivity, Weather, Sync now, Phone, Step goal, Vibration, Watch face, Diagnostics, About, Factory reset | move (wrap) | enter | face |
 | TimeDateEditor | fields Y-M-D h:m (seconds zeroed on save) | +/- (Repeat) | next field / save on last | previous field / cancel on first |
 | TimezonePicker | list grouped by offset | move | select + save | cancel |
 | Choice (12/24h, units, connectivity, vibration, face, intervals) | radio list | move | save | cancel |
@@ -426,7 +450,8 @@ Transport: USB-Serial-JTAG CDC (primary IDF console). Lines UTF-8, `\n`-terminat
 | Limits | response line <= 16 KiB; output serialized by one mutex (logs routed through it) |
 
 Command catalog (all exercised by host tests via the in-process dispatcher and by
-`test_apps/console` pytest on device). Flags: S sensitive, D destructive, R needs radio.
+`test_apps/console` pytest on device). Flags: S sensitive, D destructive, R needs radio,
+U USB console only (refused over the phone link, section 13a).
 
 | Command | Args | Result JSON (main fields) |
 |---|---|---|
@@ -439,7 +464,8 @@ Command catalog (all exercised by host tests via the in-process dispatcher and b
 | `btn <menu|back|up|down> [click|hold|repeat]` | | `screen` after handling |
 | `steps get` / `steps history` / `steps inject <delta>` / `steps reset-today` (D) | | `today`, `goal`, `history[]` |
 | `battery get` / `battery fake <mv>` / `battery fake off` | | `mv`, `pct`, `state` |
-| `weather get` / `weather fake <temp_dc> <code> [hi lo]` / `weather clear` / `weather fetch` (R) | | report, `age_s`, `freshness` |
+| `weather get` / `weather fake <temp_dc> <code> [hi lo]` / `weather push <temp_dc> <code> <hi> <lo> [observed_unix]` / `weather clear` / `weather fetch` (R, U) | | report, `age_s`, `freshness` |
+| `phone forget` (D) | — | `forgotten` |
 | `wifi status` / `wifi set <ssid> <password>` (S) / `wifi clear` (D) | | `ssid`, `has_password` (never the password) |
 | `sync now` (R) / `sync status` | | per-job results, `next_*` |
 | `provision start` (R) / `provision stop` | | `ssid`, `expires_s` (password shown on the watch only) |

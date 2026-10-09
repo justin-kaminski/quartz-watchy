@@ -183,6 +183,8 @@ public:
     /// Tethered (USB powered, console up): light_sleep() polls instead of entering light sleep so
     /// the USB-Serial-JTAG link stays up.
     void set_tethered(bool tethered) noexcept { tethered_ = tethered; }
+    /// A radio link that needs its clock (Bluetooth) is up: light_sleep() polls instead.
+    void set_radio_active(bool active) noexcept { radio_active_ = active; }
     [[nodiscard]] bool tethered() const noexcept { return tethered_; }
 
     /// Arms the wake sources of `plan`, parks the pins per ARCHITECTURE.md section 5 and enters
@@ -204,6 +206,7 @@ private:
 
     IdfBoardIo& io_;
     bool tethered_ = false;
+    bool radio_active_ = false;
     bool outputs_kept_in_light_sleep_ = false;
 };
 

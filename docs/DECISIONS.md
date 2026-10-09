@@ -33,3 +33,4 @@ is one row here; details live in the ARCHITECTURE.md section cited.
 | D-26 | Partitions: table at 0x10000, NVS 64 KiB, otadata, coredump, 2 x 3 MiB OTA slots, spare 1.75 MiB; rollback enabled | OTA later without repartitioning | PARTITIONS |
 | D-27 | NVS/flash encryption off by default; HMAC-based NVS encryption documented as the opt-in | irreversible eFuse burns need the owner (Q-04) | ARCH s13 |
 | D-28 | 80 MHz CPU, QIO 80 MHz flash, bootloader logs off, image validation skipped on deep-sleep wake | wake energy | SDKCONFIG |
+| D-29 | On-demand Bluetooth LE phone link + a Web Bluetooth page (no native app); NimBLE, passkey pairing shown on the watch, bonding; started only from the watch menu; `phone` setting + `CONFIG_QZ_PHONE` compile-out. Refines D-10: still no app to install. | the phone can push time and weather (Wi-Fi is the costliest thing the watch does); zero idle cost; one page serves Android and desktop | ARCH s13a |

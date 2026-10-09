@@ -29,6 +29,11 @@ constexpr bool kRadioCompiled = true;
 #else
 constexpr bool kRadioCompiled = false;
 #endif
+#ifdef CONFIG_QZ_PHONE
+constexpr bool kPhoneCompiled = true;
+#else
+constexpr bool kPhoneCompiled = false;
+#endif
 #ifdef CONFIG_QZ_USB_WAKE
 constexpr bool kUsbWake = true;
 #else
@@ -39,6 +44,41 @@ constexpr bool kSelftestInteractive = true;
 #else
 constexpr bool kSelftestInteractive = false;
 #endif
+
+/// Forwards to the NimBLE link and tells the platform when the radio clock must keep running:
+/// light sleep is replaced by polling for exactly the life of a session.
+class RadioAwarePhoneLink final : public qz::hal::PhoneLink {
+public:
+    explicit RadioAwarePhoneLink(qz::platform::IdfPlatform& hw) noexcept : hw_(hw) {}
+    void bind(qz::hal::PhoneLink& link) noexcept { link_ = &link; }
+
+    qz::Status start(std::string_view name) override {
+        hw_.set_radio_active(true);
+        const qz::Status s = link_->start(name);
+        if (!s) {
+            hw_.set_radio_active(false);
+        }
+        return s;
+    }
+    void stop() override {
+        link_->stop();
+        hw_.set_radio_active(false);
+    }
+    [[nodiscard]] qz::hal::PhoneLinkState state() const override { return link_->state(); }
+    [[nodiscard]] std::uint32_t passkey() const override { return link_->passkey(); }
+    qz::Result<std::size_t> receive_line(std::span<char> out, std::uint32_t timeout_ms) override {
+        return link_->receive_line(out, timeout_ms);
+    }
+    void send_line(std::string_view line) override { link_->send_line(line); }
+    qz::Status forget_bonds() override { return link_->forget_bonds(); }
+    [[nodiscard]] std::uint32_t radio_init_count() const override {
+        return link_->radio_init_count();
+    }
+
+private:
+    qz::platform::IdfPlatform& hw_;
+    qz::hal::PhoneLink* link_ = nullptr;
+};
 
 /// Retry period after a failed platform bring-up (a broken board or a transient fault): deep sleep
 /// costs microamps, a reboot loop would drain the cell in hours.
@@ -103,10 +143,21 @@ extern "C" void app_main() {
             portal = nullptr;
         }
     }
+    // The phone link is independent of Wi-Fi (a Bluetooth-only image is possible). Wrapped so
+    // the platform polls instead of light-sleeping while the link runs.
+    static RadioAwarePhoneLink phone_wrapper{hw};
+    hal::PhoneLink* phone = nullptr;
+    if constexpr (kPhoneCompiled) {
+        if (hal::PhoneLink* link = net::phone_link(); link != nullptr) {
+            phone_wrapper.bind(*link);
+            phone = &phone_wrapper;
+        }
+    }
     static const app::BuildFeatures features{
         .radio = net != nullptr,
         .usb_wake = kUsbWake,
         .selftest_interactive = kSelftestInteractive,
+        .phone = phone != nullptr,
     };
 
     // 3. Application in static storage (no heap): hardware references, then the App.
@@ -124,6 +175,7 @@ extern "C" void app_main() {
         .console = hw.console(),
         .net = net,
         .portal = portal,
+        .phone = phone,
     };
     static app::App application{app_platform, features};
 

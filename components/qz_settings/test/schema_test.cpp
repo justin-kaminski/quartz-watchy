@@ -33,6 +33,7 @@ std::vector<std::string_view> valid_samples(Key key) {
         case Key::kWeatherHighLow:
         case Key::kVibration:
         case Key::kTapWake:
+        case Key::kPhoneSync:
             return {"on", "off"};
         case Key::kLatitude:
             return {"0.00000", "41.88113", "-41.88113", "90.00000", "-90.00000"};

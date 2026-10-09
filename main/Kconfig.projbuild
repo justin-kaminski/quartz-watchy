@@ -7,6 +7,16 @@ menu "Quartz"
             Disable for an offline-only build: qz_net compiles stubs and no Wi-Fi, lwIP or
             mbedTLS symbols are linked. CI verifies the offline image with nm.
 
+    config QZ_PHONE
+        bool "Compile the Bluetooth phone link (Menu > Phone, companion web page)"
+        depends on BT_NIMBLE_ENABLED
+        default y
+        help
+            On-demand BLE link to the Quartz web page: settings, time and phone-fetched weather.
+            The stack is powered only during a session started from the watch menu. Disable (or
+            build the offline variant, which disables Bluetooth) for an image without any
+            Bluetooth code; the owner can also switch it off at run time (Menu > Phone).
+
     config QZ_USB_WAKE
         bool "Wake from deep sleep when USB is attached (EXT0 on the USB-detect pin)"
         default y

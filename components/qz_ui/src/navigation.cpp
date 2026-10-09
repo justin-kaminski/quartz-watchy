@@ -45,6 +45,8 @@ bool is_menu_tree(ScreenId id) noexcept {
         case ScreenId::kDiagnostics:
         case ScreenId::kAbout:
         case ScreenId::kFactoryReset:
+        case ScreenId::kPhone:
+        case ScreenId::kPhoneSync:
             return true;
     }
     return false;
@@ -70,6 +72,10 @@ StaticVector<ScreenId, 3> ancestors_of(ScreenId id, std::uint8_t param) noexcept
             add(ScreenId::kMenu);
             add(ScreenId::kWeatherSettings);
             break;
+        case ScreenId::kPhoneSync:
+            add(ScreenId::kMenu);
+            add(ScreenId::kPhone);
+            break;
         case ScreenId::kChoice:
             add(ScreenId::kMenu);
             if (param == static_cast<std::uint8_t>(ChoiceKind::kWeatherInterval)) {
@@ -84,6 +90,7 @@ StaticVector<ScreenId, 3> ancestors_of(ScreenId id, std::uint8_t param) noexcept
         case ScreenId::kDiagnostics:
         case ScreenId::kAbout:
         case ScreenId::kFactoryReset:
+        case ScreenId::kPhone:
             add(ScreenId::kMenu);
             break;
     }
@@ -101,6 +108,8 @@ std::int64_t idle_timeout_ms(ScreenId id) noexcept {
             return tuning::kIdleSyncMs;
         case ScreenId::kProvisioning:
             return tuning::kIdleProvisioningMs;
+        case ScreenId::kPhoneSync:
+            return tuning::kIdlePhoneSyncMs;
         case ScreenId::kStepsHistory:
         case ScreenId::kWeatherDetail:
         case ScreenId::kMenu:
@@ -113,6 +122,7 @@ std::int64_t idle_timeout_ms(ScreenId id) noexcept {
         case ScreenId::kDiagnostics:
         case ScreenId::kAbout:
         case ScreenId::kFactoryReset:
+        case ScreenId::kPhone:
         case ScreenId::kCount:
             return tuning::kIdleMenuMs;
     }

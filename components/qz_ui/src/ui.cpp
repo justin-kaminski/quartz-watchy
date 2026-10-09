@@ -34,6 +34,8 @@ constexpr std::array<NameEntry, static_cast<std::size_t>(ScreenId::kCount)> kNam
     {ScreenId::kFactoryReset, "factory_reset"},
     {ScreenId::kChargeMe, "charge_me"},
     {ScreenId::kStatusOverlay, "status_overlay"},
+    {ScreenId::kPhone, "phone"},
+    {ScreenId::kPhoneSync, "phone_sync"},
 }};
 
 constexpr bool names_in_enum_order() {
@@ -104,7 +106,8 @@ struct Ui::Impl {
           weather_detail(ScreenId::kWeatherDetail), sync(ScreenId::kSyncNow),
           provisioning(ScreenId::kProvisioning), diagnostics(ScreenId::kDiagnostics),
           about(ScreenId::kAbout), factory_reset(ScreenId::kFactoryReset),
-          charge_me(ScreenId::kChargeMe), status(ScreenId::kStatusOverlay) {
+          charge_me(ScreenId::kChargeMe), status(ScreenId::kStatusOverlay),
+          phone_sync(ScreenId::kPhoneSync) {
         table[static_cast<std::size_t>(ScreenId::kFace)] = &face;
         table[static_cast<std::size_t>(ScreenId::kStepsHistory)] = &steps;
         table[static_cast<std::size_t>(ScreenId::kWeatherDetail)] = &weather_detail;
@@ -122,6 +125,8 @@ struct Ui::Impl {
         table[static_cast<std::size_t>(ScreenId::kFactoryReset)] = &factory_reset;
         table[static_cast<std::size_t>(ScreenId::kChargeMe)] = &charge_me;
         table[static_cast<std::size_t>(ScreenId::kStatusOverlay)] = &status;
+        table[static_cast<std::size_t>(ScreenId::kPhone)] = &phone;
+        table[static_cast<std::size_t>(ScreenId::kPhoneSync)] = &phone_sync;
     }
 
     [[nodiscard]] Screen& screen(ScreenId id) noexcept {
@@ -187,6 +192,8 @@ struct Ui::Impl {
     SystemScreen factory_reset;
     SystemScreen charge_me;
     SystemScreen status;
+    PhoneScreen phone;
+    SystemScreen phone_sync;
     std::array<Screen*, static_cast<std::size_t>(ScreenId::kCount)> table{};
 };
 

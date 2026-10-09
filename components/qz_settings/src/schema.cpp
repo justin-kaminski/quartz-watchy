@@ -92,6 +92,13 @@ constexpr std::array<KeyInfo, kKeyCount> kSchema{{
     {Key::kVibration, "vib", ValueType::kBool, 0, 1, kBoolChoices, "vibration: on | off"},
     {Key::kFace, "face", ValueType::kUInt, 0, tuning::kFaceIdMax, {}, "watch face id"},
     {Key::kTapWake, "tapwake", ValueType::kBool, 0, 1, kBoolChoices, "wake on wrist tap: on | off"},
+    {Key::kPhoneSync,
+     "phone",
+     ValueType::kBool,
+     0,
+     1,
+     kBoolChoices,
+     "phone sync over Bluetooth: on | off (off = never powered)"},
 }};
 
 constexpr bool schema_is_ordered() {
@@ -342,6 +349,8 @@ std::int64_t to_number(const Settings& s, Key key) noexcept {
             return s.face_id;
         case Key::kTapWake:
             return s.tap_wake ? 1 : 0;
+        case Key::kPhoneSync:
+            return s.phone_sync ? 1 : 0;
         case Key::kTimeZone:
         case Key::kCount:
             break;
@@ -408,6 +417,9 @@ Status apply_number(Settings& s, Key key, std::int64_t value) noexcept {
             break;
         case Key::kTapWake:
             s.tap_wake = value != 0;
+            break;
+        case Key::kPhoneSync:
+            s.phone_sync = value != 0;
             break;
         case Key::kTimeZone:
         case Key::kCount:

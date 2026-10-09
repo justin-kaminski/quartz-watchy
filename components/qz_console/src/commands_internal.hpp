@@ -28,6 +28,10 @@ struct CatalogTuning {
     /// Weather temperatures in deci-degrees Celsius (-90.0 .. +60.0). [TUNE]
     static constexpr std::int64_t kTempMinDc = -900;
     static constexpr std::int64_t kTempMaxDc = 600;
+    /// `weather push` observation time: at most 6 h old, at most 5 min ahead of the watch clock
+    /// (phone and watch clocks differ slightly). [TUNE]
+    static constexpr std::int64_t kPushMaxAgeS = 6 * 3600;
+    static constexpr std::int64_t kPushMaxSkewS = 300;
     /// `vibrate`: default pulse and the protocol's 1..1000 ms range (ARCHITECTURE.md section 16).
     static constexpr std::int64_t kVibrateDefaultMs = 200;
     static constexpr std::int64_t kVibrateMaxMs = 1000;

@@ -69,6 +69,9 @@ public:
     /// switches IdfSleep to tethered mode (no light sleep); stop() undoes both. Never started on
     /// battery: only the tether policy calls start().
     hal::ConsolePort& console() noexcept;
+    /// While a Bluetooth link runs, light sleep would stop the radio clock and drop the phone:
+    /// IdfSleep polls instead (like tethered mode). main/ toggles this around PhoneLink sessions.
+    void set_radio_active(bool active) noexcept;
 
 private:
     IdfPlatform() = default;

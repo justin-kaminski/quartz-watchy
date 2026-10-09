@@ -36,6 +36,13 @@ Outcome SystemScreen::handle(const model::InputEvent& event, const WatchState& s
                 return o;
             }
             return Outcome::none();
+        case ScreenId::kPhoneSync:
+            if (is_click(event, Button::kBack)) {
+                Outcome o = Outcome::pop();
+                o.with(make_action(ActionKind::kStopPhoneSync));
+                return o;
+            }
+            return Outcome::none();
         case ScreenId::kDiagnostics:
             if (event.kind == model::InputKind::kClick && list_direction(event) != 0) {
                 page_ = static_cast<std::uint8_t>(
@@ -73,6 +80,7 @@ Outcome SystemScreen::handle(const model::InputEvent& event, const WatchState& s
         case ScreenId::kWeatherSettings:
         case ScreenId::kLocationEditor:
         case ScreenId::kStepGoalEditor:
+        case ScreenId::kPhone:
         case ScreenId::kCount:
             break;
     }

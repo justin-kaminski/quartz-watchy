@@ -108,6 +108,10 @@ bool Core::radio_compiled() const noexcept {
     return f_.radio && p_.net != nullptr;
 }
 
+bool Core::phone_compiled() const noexcept {
+    return f_.phone && p_.phone != nullptr;
+}
+
 time::UnixSeconds Core::now_utc_s() const noexcept {
     return keeper_.now_utc_us() / time::kUsPerSecond;
 }
@@ -194,6 +198,26 @@ const ui::WatchState& Core::build_state(time::UnixSeconds utc_s) noexcept {
             prov_started_rtc_us_ + (wiring::kProvisioningTtlS * wiring::kUs) - p_.clock.rtc_us();
         st.prov_seconds_left = static_cast<std::uint16_t>(
             std::clamp<std::int64_t>(left_us / wiring::kUs, 0, wiring::kProvisioningTtlS));
+    }
+
+    st.phone_available = phone_compiled();
+    if (phone_active_) {
+        switch (p_.phone->state()) {
+            case hal::PhoneLinkState::kOff:
+                st.phone_phase = ui::PhonePhase::kIdle;
+                break;
+            case hal::PhoneLinkState::kAdvertising:
+                st.phone_phase = ui::PhonePhase::kAdvertising;
+                break;
+            case hal::PhoneLinkState::kPairing:
+                st.phone_phase = ui::PhonePhase::kPairing;
+                st.phone_passkey = p_.phone->passkey(); // shown on the watch only, never logged
+                break;
+            case hal::PhoneLinkState::kSecure:
+                st.phone_phase = ui::PhonePhase::kConnected;
+                break;
+        }
+        st.phone_name = phone_name_.view();
     }
 
     st.power = power_.level();

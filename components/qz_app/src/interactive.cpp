@@ -79,6 +79,11 @@ void Core::interactive_session(std::uint8_t seed_mask) noexcept {
         if (now >= hard_deadline) {
             break;
         }
+        // A finished phone session shows its result briefly, then the face returns.
+        const bool phone_result = ui_.current() == ui::ScreenId::kPhoneSync && !phone_active_;
+        if (phone_result && now - phone_ended_us_ >= wiring::kPhoneResultUs) {
+            break;
+        }
 
         std::int64_t wait = hard_deadline - now;
         if (pressed) {
@@ -99,9 +104,17 @@ void Core::interactive_session(std::uint8_t seed_mask) noexcept {
         if (prov_active_) {
             wait = std::min(wait, wiring::kProvPollUs);
         }
+        if (phone_result) {
+            wait = std::min(wait, phone_ended_us_ + wiring::kPhoneResultUs - now);
+        }
         wait = std::max(wait, wiring::kMinWaitUs);
-        sleep_for(wait, !pressed);
+        if (phone_active_) {
+            poll_phone(wait); // no light sleep while the BLE link runs
+        } else {
+            sleep_for(wait, !pressed);
+        }
     }
+    stop_phone_impl(conn::PhoneEnd::kNone);
     return_to_face();
 }
 
@@ -235,6 +248,7 @@ std::int64_t Core::tethered_loop() noexcept {
 
         sample_buttons();
         poll_provisioning();
+        poll_phone(0);
         now = p_.clock.rtc_us();
         if (now >= next_poll) {
             next_poll = now + wiring::kTetherPollUs;
@@ -255,6 +269,7 @@ std::int64_t Core::tethered_loop() noexcept {
             return_to_face();
         }
     }
+    stop_phone_impl(conn::PhoneEnd::kNone);
     p_.console.stop();
     if (tether_.state() == TetherState::kDetaching) {
         tether_.on_detached();

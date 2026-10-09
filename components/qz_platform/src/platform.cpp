@@ -105,4 +105,8 @@ hal::ConsolePort& IdfPlatform::console() noexcept {
     return objects().console;
 }
 
+void IdfPlatform::set_radio_active(bool active) noexcept {
+    objects().sleep.set_radio_active(active);
+}
+
 } // namespace qz::platform

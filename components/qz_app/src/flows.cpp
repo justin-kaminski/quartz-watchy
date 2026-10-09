@@ -190,6 +190,7 @@ void Core::begin_wake() noexcept {
     if (prov_active_) {
         stop_provisioning_impl();
     }
+    stop_phone_impl(conn::PhoneEnd::kNone);
     ui_.reset_to_face();
     recognizer_ = ui::GestureRecognizer{};
     op_phase_ = ui::OpPhase::kIdle;

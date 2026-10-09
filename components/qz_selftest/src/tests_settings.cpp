@@ -41,6 +41,7 @@ constexpr std::array<KeyCase, static_cast<std::size_t>(Key::kCount)> kCases{{
     {Key::kVibration, "2", "", "off"},
     {Key::kFace, "256", "-1", "1"},
     {Key::kTapWake, "x", "", "on"},
+    {Key::kPhoneSync, "2", "", "off"},
 }};
 
 const KeyCase* case_for(Key key) noexcept {

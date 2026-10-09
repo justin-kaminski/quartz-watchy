@@ -36,6 +36,8 @@ enum class ScreenId : std::uint8_t {
     kFactoryReset,
     kChargeMe,
     kStatusOverlay,
+    kPhone,     ///< Phone submenu: sync, on/off, forget
+    kPhoneSync, ///< a running phone-sync session (pairing code, progress)
     kCount
 };
 [[nodiscard]] std::string_view screen_name(ScreenId id) noexcept; ///< "face", "menu", ...
@@ -43,6 +45,9 @@ enum class ScreenId : std::uint8_t {
 
 /// Progress of a radio/provisioning operation shown by SyncNow / Provisioning screens.
 enum class OpPhase : std::uint8_t { kIdle = 0, kRunning, kSucceeded, kFailed };
+
+/// Phone-link session as the PhoneSync screen shows it (mirrors hal::PhoneLinkState).
+enum class PhonePhase : std::uint8_t { kIdle = 0, kAdvertising, kPairing, kConnected };
 
 /// Everything any screen or face may show. Built by the app once per render; views point into
 /// app-owned storage valid until the next build. Scenes build it from fixed fixtures.
@@ -72,6 +77,11 @@ struct WatchState {
     std::string_view prov_ssid;
     std::string_view prov_password; ///< displayed on the watch only, never logged
     std::uint16_t prov_seconds_left = 0;
+    // phone link
+    bool phone_available = false; ///< BuildFeatures.phone
+    PhonePhase phone_phase = PhonePhase::kIdle;
+    std::uint32_t phone_passkey = 0; ///< six digits while the phone asks for it, else 0
+    std::string_view phone_name;     ///< advertised name while a session runs
     // power / system
     model::PowerLevel power = model::PowerLevel::kNormal;
     bool tethered = false;
@@ -94,6 +104,9 @@ enum class ActionKind : std::uint8_t {
     kSyncNow,
     kStartProvisioning,
     kStopProvisioning,
+    kStartPhoneSync,
+    kStopPhoneSync,
+    kForgetPhones,
     kFactoryReset,
     kRunSelfTest,
     kFullRefresh,

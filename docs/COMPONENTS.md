@@ -143,3 +143,7 @@ tool, verified in CI).
   takes a `gfx::Framebuffer`) -> add **qz_gfx** to `qz_ssd1681` deps. gfx depends only on core, so
   there is no cycle. Table rows now carry the dependencies; this log is history.
 - 2026-10-06 (lead): `qz_faces` includes `qz/time/` (calendar helpers for the date line) -> add **qz_time** to `qz_faces` deps. time depends only on core/hal, so there is no cycle.
+- 2026-10-09 (lead, phone sync, ARCHITECTURE section 13a): no new component and no new qz edge.
+  `qz_hal` gains `hal::PhoneLink`; `qz_conn` gains `PhoneSession` and `device_name()`; `qz_net`
+  gains the NimBLE link and adds IDF component **bt** to its PRIV_REQUIRES (link-level only; the
+  offline image references nothing from it, checked by `tools/check_offline.sh`).

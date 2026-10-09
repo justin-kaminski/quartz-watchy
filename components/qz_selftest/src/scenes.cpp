@@ -330,6 +330,38 @@ void s_provisioning_long(WatchState& s, Settings& b) noexcept {
     s.prov_password = "quartz-7421-0f3a-9c1d-55e2-b8aa-1d4c-72e9";
     s.prov_seconds_left = 17;
 }
+void s_phone(WatchState& s, Settings& b) noexcept {
+    base(s, b);
+    s.phone_available = true;
+}
+void s_phone_off(WatchState& s, Settings& b) noexcept {
+    s_phone(s, b);
+    set(b, Key::kPhoneSync, "off");
+}
+void s_phone_waiting(WatchState& s, Settings& b) noexcept {
+    s_phone(s, b);
+    s.phone_phase = ui::PhonePhase::kAdvertising;
+    s.phone_name = "Quartz-1A2B";
+    s.op_phase = ui::OpPhase::kRunning;
+}
+void s_phone_pairing(WatchState& s, Settings& b) noexcept {
+    s_phone_waiting(s, b);
+    s.phone_phase = ui::PhonePhase::kPairing;
+    s.phone_passkey = 47'201; // leading zero is part of the code: "047201"
+}
+void s_phone_connected(WatchState& s, Settings& b) noexcept {
+    s_phone_waiting(s, b);
+    s.phone_phase = ui::PhonePhase::kConnected;
+}
+void s_phone_done(WatchState& s, Settings& b) noexcept {
+    s_phone(s, b);
+    s.op_phase = ui::OpPhase::kSucceeded;
+}
+void s_phone_no_phone(WatchState& s, Settings& b) noexcept {
+    s_phone(s, b);
+    s.op_phase = ui::OpPhase::kFailed;
+    s.op_error = Errc::kTimeout;
+}
 void s_diagnostics(WatchState& s, Settings& b) noexcept {
     base(s, b);
     s.tethered = true;
@@ -409,6 +441,14 @@ constexpr auto kScenes = std::to_array<Scene>({
     {"screen_provisioning", ScreenId::kProvisioning, &s_provisioning, {}},
     {"screen_provisioning_starting", ScreenId::kProvisioning, &s_provisioning_starting, {}},
     {"screen_provisioning_long_password", ScreenId::kProvisioning, &s_provisioning_long, {}},
+    {"screen_phone", ScreenId::kPhone, &s_phone, {}},
+    {"screen_phone_off", ScreenId::kPhone, &s_phone_off, {}},
+    {"screen_phone_sync_waiting", ScreenId::kPhoneSync, &s_phone_waiting, {}},
+    {"screen_phone_sync_pairing", ScreenId::kPhoneSync, &s_phone_pairing, {}},
+    {"screen_phone_sync_connected", ScreenId::kPhoneSync, &s_phone_connected, {}},
+    {"screen_phone_sync_done", ScreenId::kPhoneSync, &s_phone_done, {}},
+    {"screen_phone_sync_no_phone", ScreenId::kPhoneSync, &s_phone_no_phone, {}},
+    {"screen_menu_with_phone", ScreenId::kMenu, &s_phone, kDown5},
     {"screen_diagnostics", ScreenId::kDiagnostics, &s_diagnostics, {}},
     {"screen_diagnostics_degraded", ScreenId::kDiagnostics, &s_diagnostics_degraded, {}},
     {"screen_diagnostics_page2", ScreenId::kDiagnostics, &s_diagnostics, kDown1},

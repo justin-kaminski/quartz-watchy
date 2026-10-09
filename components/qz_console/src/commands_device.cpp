@@ -157,7 +157,8 @@ Status weather_get(DeviceApi& api, Args /*args*/, JsonWriter& out) {
     return ok();
 }
 
-Status weather_fake(DeviceApi& api, Args args, JsonWriter& out) {
+/// `<temp_dc> <code> [hi lo]` (args[0..3]) into `report`.
+Status parse_report(Args args, model::WeatherReport& report) noexcept {
     if (args.size() == 3) {
         return Errc::kBadArgs; // hi and lo come as a pair
     }
@@ -166,12 +167,10 @@ Status weather_fake(DeviceApi& api, Args args, JsonWriter& out) {
     if (!temp || !condition) {
         return Errc::kBadArgs;
     }
-    model::WeatherReport report;
     report.temp_dc = static_cast<std::int16_t>(*temp);
     report.condition = *condition;
     report.valid = 1;
-    report.faked = 1;
-    if (args.size() == 4) {
+    if (args.size() >= 4) {
         const Result<std::int64_t> high =
             parse_integer(args[2], Tune::kTempMinDc, Tune::kTempMaxDc);
         const Result<std::int64_t> low = parse_integer(args[3], Tune::kTempMinDc, Tune::kTempMaxDc);
@@ -182,10 +181,47 @@ Status weather_fake(DeviceApi& api, Args args, JsonWriter& out) {
         report.low_dc = static_cast<std::int16_t>(*low);
         report.has_high_low = 1;
     }
+    return ok();
+}
+
+Status weather_fake(DeviceApi& api, Args args, JsonWriter& out) {
+    model::WeatherReport report;
+    QZ_RETURN_IF_ERROR(parse_report(args, report));
+    report.faked = 1;
     const TimeInfo now = api.time_info();
     report.fetched_utc = now.valid ? now.utc_us / time::kUsPerSecond : 0;
     QZ_RETURN_IF_ERROR(api.fake_weather(report));
     write_weather(out, api.weather());
+    return ok();
+}
+
+/// `weather push <temp_dc> <code> <hi> <lo> [observed_unix]`: hi/lo are required (the page always
+/// has them); the observation time defaults to now and needs a valid clock either way.
+Status weather_push(DeviceApi& api, Args args, JsonWriter& out) {
+    model::WeatherReport report;
+    QZ_RETURN_IF_ERROR(parse_report(args.first(4), report));
+    const TimeInfo now = api.time_info();
+    if (!now.valid) {
+        return Errc::kNoTime;
+    }
+    const time::UnixSeconds now_s = now.utc_us / time::kUsPerSecond;
+    report.fetched_utc = now_s;
+    if (args.size() == 5) {
+        const Result<std::int64_t> observed =
+            parse_integer(args[4], now_s - Tune::kPushMaxAgeS, now_s + Tune::kPushMaxSkewS);
+        if (!observed) {
+            return Errc::kBadArgs;
+        }
+        report.fetched_utc = std::min<time::UnixSeconds>(*observed, now_s);
+    }
+    QZ_RETURN_IF_ERROR(api.push_weather(report));
+    write_weather(out, api.weather());
+    return ok();
+}
+
+Status phone_forget(DeviceApi& api, Args /*args*/, JsonWriter& out) {
+    QZ_RETURN_IF_ERROR(api.forget_phones());
+    out.field_bool("forgotten", true);
     return ok();
 }
 
@@ -357,13 +393,27 @@ constexpr auto kCommands = std::to_array<Command>({
      4,
      kFlagNone,
      weather_fake},
+    {"weather push",
+     "weather push <temp_dc> <code> <hi> <lo> [observed_unix]",
+     "store a report computed by the phone page",
+     4,
+     5,
+     kFlagNone,
+     weather_push},
     {"weather clear", "weather clear", "drop the cached report", 0, 0, kFlagNone, weather_clear},
+    {"phone forget",
+     "phone forget",
+     "delete every paired phone",
+     0,
+     0,
+     kFlagDestructive,
+     phone_forget},
     {"weather fetch",
      "weather fetch",
      "fetch weather now over Wi-Fi",
      0,
      0,
-     kFlagNeedsRadio,
+     kFlagNeedsRadio | kFlagUsbOnly,
      weather_fetch},
     {"screen list", "screen list", "screen ids", 0, 0, kFlagNone, screen_list},
     {"screen get", "screen get", "current screen", 0, 0, kFlagNone, screen_get},

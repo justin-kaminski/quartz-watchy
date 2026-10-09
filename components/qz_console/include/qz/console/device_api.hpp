@@ -81,6 +81,14 @@ public:
     [[nodiscard]] virtual WeatherInfo weather() const = 0;
     virtual Status fake_weather(const model::WeatherReport& report) = 0;
     virtual Status clear_weather() = 0;
+    /// A real report computed elsewhere (the phone page fetches Open-Meteo and pushes the result):
+    /// stored like a fetched report, not marked as fake. Default: kUnsupported.
+    virtual Status push_weather(const model::WeatherReport& /*report*/) {
+        return Errc::kUnsupported;
+    }
+    // phone link (kUnsupported when compiled out)
+    /// Deletes every stored phone bond. Default: kUnsupported.
+    virtual Status forget_phones() { return Errc::kUnsupported; }
     // radio (kUnsupported when compiled out)
     [[nodiscard]] virtual std::optional<FixedString<32>>
     wifi_ssid() const = 0; ///< never the password

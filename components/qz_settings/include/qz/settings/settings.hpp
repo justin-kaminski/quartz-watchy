@@ -30,6 +30,7 @@ enum class Key : std::uint8_t {
     kVibration,          ///< "vib"    bool
     kFace,               ///< "face"   registered face id
     kTapWake,            ///< "tapwake" bool
+    kPhoneSync,          ///< "phone"  bool: Phone sync allowed (off = BLE never powered)
     kCount
 };
 
@@ -49,6 +50,7 @@ struct Settings {
     bool vibration = true;
     std::uint8_t face_id = 0;
     bool tap_wake = false;
+    bool phone_sync = true; ///< on-demand only: costs nothing until started from the menu
 
     bool operator==(const Settings&) const noexcept = default;
 };

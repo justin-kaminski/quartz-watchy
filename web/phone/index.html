@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Quartz Phone Sync</title>
+<!--
+  Companion page for Quartz (Watchy v3 firmware), ARCHITECTURE.md section 13a.
+  Web Bluetooth (Chrome on Android or desktop) to the watch's Nordic-UART-style GATT service,
+  carrying the console line protocol v1 (section 16). Needs a secure context: https:// or
+  http://localhost. Self-contained: no external scripts, fonts or trackers. Nothing is sent
+  anywhere except the watch and, for weather, api.open-meteo.com.
+-->
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e3e1dc;
+  --accent: #1d1d1f; --accent-ink: #ffffff; --ok: #1f7a3d; --bad: #b3261e; --warn: #8a5a00;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111113; --card: #1b1b1e; --ink: #f1f1f3; --muted: #9c9ca3; --line: #2c2c31;
+    --accent: #f1f1f3; --accent-ink: #111113; --ok: #6cc98b; --bad: #ff8a80; --warn: #e3b35c;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+header { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.pill { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.pill.on { color: var(--ok); border-color: currentColor; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 0 0 14px; }
+.hidden { display: none !important; }
+button {
+  font: inherit; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+  color: var(--ink); padding: 10px 14px; cursor: pointer;
+}
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); width: 100%; padding: 14px; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.row { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row label { flex: 1; }
+.row small { display: block; color: var(--muted); font-size: 13px; }
+select, input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-width: 55%; }
+.steps { list-style: none; padding: 0; margin: 0; }
+.steps li { padding: 4px 0; display: flex; justify-content: space-between; gap: 8px; }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.grid div span { display: block; font-size: 13px; color: var(--muted); }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+details summary { cursor: pointer; color: var(--muted); }
+pre { font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--muted); max-height: 240px; }
+p { margin: 0 0 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Quartz</h1>
+    <span id="pill" class="pill">Not connected</span>
+  </header>
+
+  <section id="unsupported" class="card hidden">
+    <h2>Not available here</h2>
+    <p>This browser cannot talk to Bluetooth devices. Open this page in Chrome on Android (or desktop Chrome), served over https.</p>
+  </section>
+
+  <section id="connect" class="card">
+    <h2>Connect</h2>
+    <p>On the watch: <b>Menu &rsaquo; Phone &rsaquo; Sync with phone</b>. Then tap Connect and pick <b>Quartz-…</b>.</p>
+    <p class="muted">The first time, your phone asks for a 6-digit code: type the one shown on the watch. After that the phone is remembered.</p>
+    <button id="btnConnect" class="primary">Connect</button>
+    <p id="connectMsg" class="muted" style="margin-top:10px"></p>
+  </section>
+
+  <section id="sync" class="card hidden">
+    <h2>Sync</h2>
+    <ul class="steps" id="syncSteps"></ul>
+    <div class="actions">
+      <button id="btnSyncAgain">Sync again</button>
+      <button id="btnDone">Done</button>
+    </div>
+  </section>
+
+  <section id="statusCard" class="card hidden">
+    <h2>Watch</h2>
+    <div class="grid" id="statusGrid"></div>
+  </section>
+
+  <section id="settingsCard" class="card hidden">
+    <h2>Settings</h2>
+    <div id="settingsRows"></div>
+  </section>
+
+  <section id="weatherCard" class="card hidden">
+    <h2>Weather</h2>
+    <p class="muted" id="weatherInfo">The phone fetches the forecast (Open-Meteo) and sends it to the watch, so the watch does not need Wi-Fi.</p>
+    <div class="actions">
+      <button id="btnLocation">Use this phone's location</button>
+      <button id="btnWeather">Update weather now</button>
+    </div>
+  </section>
+
+  <section id="wifiCard" class="card hidden">
+    <details>
+      <summary>Wi-Fi (optional)</summary>
+      <p class="muted" style="margin-top:10px">Only needed if the watch should sync on its own. The password goes over the encrypted link and is never shown again.</p>
+      <div class="row"><label for="ssid">Network</label><input id="ssid" autocomplete="off"></div>
+      <div class="row"><label for="pass">Password</label><input id="pass" type="password" autocomplete="off"></div>
+      <div class="actions"><button id="btnWifi">Save Wi-Fi</button></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Log</summary>
+      <pre id="log"></pre>
+    </details>
+  </section>
+</main>
+
+<script>
+"use strict";
+// ---- protocol (ARCHITECTURE.md section 16) --------------------------------------------------
+const NUS = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // phone -> watch (write)
+const TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // watch -> phone (notify)
+const WRITE_CHUNK = 20;          // fits the smallest ATT MTU; ordering kept by write-with-response
+const REQUEST_TIMEOUT_MS = 15000;
+const PAIRING_WINDOW_MS = 90000; // time to type the code on the phone
+const SENSITIVE = /^wifi set /;  // never echoed into the log
+
+// Weather condition names the watch accepts, from WMO codes (mirrors qz_weather condition_from_wmo).
+function conditionFromWmo(code) {
+  if (code === 0 || code === 1) return "clear";
+  if (code === 2) return "partly_cloudy";
+  if (code === 3) return "cloudy";
+  if (code === 45 || code === 48) return "fog";
+  if (code >= 51 && code <= 57) return "drizzle";
+  if (code >= 61 && code <= 67) return "rain";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+  if (code >= 80 && code <= 82) return "showers";
+  if (code >= 95 && code <= 99) return "thunder";
+  return "unknown";
+}
+
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+function log(text) {
+  logEl.textContent = (logEl.textContent + text + "\n").slice(-6000);
+}
+
+function quote(arg) {
+  const s = String(arg);
+  if (s !== "" && !/[\s"\\]/.test(s)) return s;
+  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+}
+
+class Watch {
+  constructor() {
+    this.device = null; this.rx = null; this.tx = null;
+    this.buffer = ""; this.pending = new Map(); this.nextId = 1;
+    this.queue = Promise.resolve(); this.onDisconnect = () => {};
+  }
+
+  async connect() {
+    this.device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "Quartz" }], optionalServices: [NUS],
+    });
+    this.device.addEventListener("gattserverdisconnected", () => this.handleDisconnect());
+    const server = await this.device.gatt.connect();
+    const service = await server.getPrimaryService(NUS);
+    this.rx = await service.getCharacteristic(RX);
+    this.tx = await service.getCharacteristic(TX);
+    this.tx.addEventListener("characteristicvaluechanged", (e) => this.onData(e.target.value));
+  }
+
+  // The watch asks for pairing as soon as we connect; the protected characteristics refuse
+  // access until the code is entered, so retry until the link is secure.
+  async waitUntilSecure(onWaiting) {
+    const deadline = Date.now() + PAIRING_WINDOW_MS;
+    let lastError = null;
+    while (Date.now() < deadline) {
+      try {
+        await this.tx.startNotifications();
+        const v = await this.run("version", 4000);
+        return v;
+      } catch (e) {
+        lastError = e;
+        onWaiting();
+        await new Promise((r) => setTimeout(r, 1500));
+        if (!this.device.gatt.connected) throw new Error("The watch disconnected");
+      }
+    }
+    throw lastError || new Error("Pairing timed out");
+  }
+
+  onData(view) {
+    this.buffer += new TextDecoder().decode(view);
+    let nl;
+    while ((nl = this.buffer.indexOf("\n")) >= 0) {
+      const line = this.buffer.slice(0, nl).replace(/\r$/, "");
+      this.buffer = this.buffer.slice(nl + 1);
+      this.onLine(line);
+    }
+  }
+
+  onLine(line) {
+    // "@QZ1 <id> OK <json>" | "@QZ1 <id> ERR <code> <json>" | "@QZ1 ! EVT <json>" (events ignored)
+    if (!line.startsWith("@QZ1 ")) return;
+    const body = line.slice(5);
+    const sp = body.indexOf(" ");
+    if (sp < 0) return;
+    const id = body.slice(0, sp);
+    const rest = body.slice(sp + 1);
+    let kind, code = "", text;
+    if (rest.startsWith("OK ")) { kind = "OK"; text = rest.slice(3); }
+    else if (rest.startsWith("ERR ")) {
+      kind = "ERR";
+      const r = rest.slice(4), sp2 = r.indexOf(" ");
+      code = sp2 < 0 ? r : r.slice(0, sp2);
+      text = sp2 < 0 ? "{}" : r.slice(sp2 + 1);
+    } else return;
+    let json = {};
+    try { json = JSON.parse(text); } catch { /* keep {} */ }
+    const p = this.pending.get(id);
+    if (!p) return;
+    this.pending.delete(id);
+    clearTimeout(p.timer);
+    if (kind === "OK") p.resolve(json);
+    else p.reject(Object.assign(new Error((json && json.msg) || code), { code }));
+  }
+
+  run(command, timeoutMs = REQUEST_TIMEOUT_MS) {
+    const id = "p" + (this.nextId++).toString(36);
+    const line = "#" + id + " " + command + "\n";
+    log("> " + (SENSITIVE.test(command) ? command.split(" ").slice(0, 2).join(" ") + " ..." : command));
+    const result = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error("No answer from the watch")); }, timeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
+    });
+    // Serialize writes: interleaved chunks of two lines would corrupt both.
+    this.queue = this.queue.then(async () => {
+      const bytes = new TextEncoder().encode(line);
+      for (let i = 0; i < bytes.length; i += WRITE_CHUNK) {
+        await this.rx.writeValueWithResponse(bytes.slice(i, i + WRITE_CHUNK));
+      }
+    }).catch((e) => {
+      const p = this.pending.get(id);
+      if (p) { this.pending.delete(id); clearTimeout(p.timer); p.reject(e); }
+    });
+    return result.then((r) => { log("< " + id + " OK"); return r; },
+                       (e) => { log("< " + id + " " + (e.code || "error") + ": " + e.message); throw e; });
+  }
+
+  handleDisconnect() {
+    for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error("Disconnected")); }
+    this.pending.clear();
+    this.onDisconnect();
+  }
+
+  disconnect() { if (this.device && this.device.gatt.connected) this.device.gatt.disconnect(); }
+}
+
+// ---- UI ----------------------------------------------------------------------------------------
+const watch = new Watch();
+let settings = [];
+const show = (id, on = true) => $(id).classList.toggle("hidden", !on);
+
+function setPill(text, on) { $("pill").textContent = text; $("pill").classList.toggle("on", !!on); }
+
+function stepList(items) {
+  $("syncSteps").innerHTML = "";
+  for (const [label, state, detail] of items) {
+    const li = document.createElement("li");
+    const left = document.createElement("span"); left.textContent = label;
+    const right = document.createElement("span");
+    right.textContent = detail || (state === "ok" ? "done" : state === "bad" ? "failed" : state === "skip" ? "skipped" : "…");
+    right.className = state === "ok" ? "ok" : state === "bad" ? "bad" : "muted";
+    li.append(left, right); $("syncSteps").append(li);
+  }
+}
+
+function setting(key) { return settings.find((s) => s.key === key); }
+
+async function loadSettings() {
+  const r = await watch.run("settings list");
+  settings = r.settings || [];
+  renderSettings();
+}
+
+const LABELS = {
+  tfmt: "Clock", tz: "Time zone", units: "Temperature", conn: "Wi-Fi sync", wx_hilo: "High / low",
+  lat: "Latitude", lon: "Longitude", sync_h: "Time sync every (h)", wx_min: "Weather every (min)",
+  goal: "Step goal", vib: "Vibration", face: "Watch face", tapwake: "Wake on wrist tap", phone: "Phone sync",
+};
+const HIDDEN_KEYS = new Set(["lat", "lon", "tz", "face"]); // handled by dedicated controls
+
+async function renderSettings() {
+  const box = $("settingsRows"); box.innerHTML = "";
+  let faces = null;
+  try { faces = await watch.run("face list"); } catch { /* optional */ }
+  if (faces && faces.faces) {
+    box.append(rowWithSelect("Watch face", "", faces.faces.map((f) => [String(f.id), f.name]), String(faces.current),
+      async (v) => { await watch.run("face set " + quote(v)); }));
+  }
+  for (const s of settings) {
+    if (HIDDEN_KEYS.has(s.key)) continue;
+    const label = LABELS[s.key] || s.key;
+    const apply = async (v) => {
+      await watch.run("settings set " + s.key + " " + quote(v));
+      s.value = v;
+      if (s.key === "phone" && v === "off") setPill("Phone sync turned off", false);
+    };
+    if (Array.isArray(s.choices) && s.choices.length) {
+      box.append(rowWithSelect(label, s.help, s.choices.map((c) => [c, c]), String(s.value), apply));
+    } else {
+      box.append(rowWithInput(label, s.help, String(s.value), apply));
+    }
+  }
+}
+
+function rowWithSelect(label, help, options, value, onChange) {
+  const row = document.createElement("div"); row.className = "row";
+  const l = document.createElement("label"); l.textContent = label;
+  if (help) { const sm = document.createElement("small"); sm.textContent = help; l.append(sm); }
+  const sel = document.createElement("select");
+  for (const [v, text] of options) { const o = document.createElement("option"); o.value = v; o.textContent = text; sel.append(o); }
+  sel.value = value;
+  sel.addEventListener("change", async () => {
+    sel.disabled = true;
+    try { await onChange(sel.value); } catch (e) { alert(e.message); sel.value = value; }
+    value = sel.value; sel.disabled = false;
+  });
+  row.append(l, sel); return row;
+}
+
+function rowWithInput(label, help, value, onChange) {
+  const row = document.createElement("div"); row.className = "row";
+  const l = document.createElement("label"); l.textContent = label;
+  if (help) { const sm = document.createElement("small"); sm.textContent = help; l.append(sm); }
+  const input = document.createElement("input"); input.value = value; input.inputMode = "decimal";
+  input.addEventListener("change", async () => {
+    input.disabled = true;
+    try { await onChange(input.value.trim()); value = input.value.trim(); } catch (e) { alert(e.message); input.value = value; }
+    input.disabled = false;
+  });
+  row.append(l, input); return row;
+}
+
+async function refreshStatus() {
+  const s = await watch.run("status");
+  const grid = $("statusGrid"); grid.innerHTML = "";
+  const cell = (k, v) => { const d = document.createElement("div"); const sp = document.createElement("span"); sp.textContent = k; d.append(sp, document.createTextNode(v)); grid.append(d); };
+  cell("Time", s.valid ? (s.local || "").replace("T", " ").slice(0, 16) : "not set");
+  cell("Time zone", s.tz || "—");
+  cell("Battery", s.battery ? (s.battery.pct + "% · " + (s.battery.mv / 1000).toFixed(2) + " V") : "—");
+  cell("Steps today", s.steps != null ? String(s.steps) : "—");
+  cell("Weather", s.weather ? s.weather.state + (s.weather.age_s ? " · " + Math.round(s.weather.age_s / 60) + " min old" : "") : "—");
+  cell("Power", s.power_state || "—");
+}
+
+function isoUtcNow() { return new Date().toISOString().replace(/\.\d{3}Z$/, "Z"); }
+
+async function pushWeather() {
+  const lat = setting("lat"), lon = setting("lon");
+  if (!lat || !lon || lat.value === "unset" || lon.value === "unset" || lat.value === "" || lon.value === "") {
+    throw Object.assign(new Error("No location on the watch: tap \u201cUse this phone's location\u201d"), { skip: true });
+  }
+  const url = "https://api.open-meteo.com/v1/forecast?latitude=" + encodeURIComponent(lat.value) +
+    "&longitude=" + encodeURIComponent(lon.value) +
+    "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1&timeformat=unixtime";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Open-Meteo answered " + res.status);
+  const j = await res.json();
+  const dc = (c) => Math.round(c * 10);
+  const temp = dc(j.current.temperature_2m);
+  const hi = dc(j.daily.temperature_2m_max[0]), lo = dc(j.daily.temperature_2m_min[0]);
+  const observed = Math.min(Math.floor(Date.now() / 1000), j.current.time);
+  await watch.run(["weather push", temp, conditionFromWmo(j.current.weather_code), Math.max(hi, lo), Math.min(hi, lo), observed].join(" "));
+  return (temp / 10).toFixed(1) + "°C";
+}
+
+async function syncAll() {
+  const steps = [["Time", "run"], ["Time zone", "run"], ["Weather", "run"]];
+  stepList(steps);
+  try { await watch.run("time set " + isoUtcNow()); steps[0][1] = "ok"; }
+  catch (e) { steps[0][1] = "bad"; steps[0][2] = e.message; }
+  stepList(steps);
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const current = setting("tz");
+  if (current && current.value === zone) { steps[1][1] = "ok"; steps[1][2] = zone; }
+  else {
+    try { await watch.run("tz set " + quote(zone)); steps[1][1] = "ok"; steps[1][2] = zone; if (current) current.value = zone; }
+    catch (e) { steps[1][1] = "bad"; steps[1][2] = e.code === "not_found" ? zone + " is not in the watch's list" : e.message; }
+  }
+  stepList(steps);
+  try { steps[2][2] = await pushWeather(); steps[2][1] = "ok"; }
+  catch (e) { steps[2][1] = e.skip ? "skip" : "bad"; steps[2][2] = e.message; }
+  stepList(steps);
+  await refreshStatus().catch(() => {});
+}
+
+function onConnected() {
+  setPill("Connected", true);
+  show("connect", false);
+  for (const id of ["sync", "statusCard", "settingsCard", "weatherCard", "wifiCard"]) show(id);
+}
+
+watch.onDisconnect = () => {
+  setPill("Not connected", false);
+  show("connect");
+  for (const id of ["sync", "statusCard", "settingsCard", "weatherCard", "wifiCard"]) show(id, false);
+  $("btnConnect").disabled = false;
+  $("connectMsg").textContent = "Disconnected. Start Phone sync on the watch again to reconnect.";
+};
+
+$("btnConnect").addEventListener("click", async () => {
+  $("btnConnect").disabled = true;
+  $("connectMsg").textContent = "";
+  try {
+    await watch.connect();
+    setPill("Pairing…", false);
+    $("connectMsg").textContent = "Connected. Waiting for a secure link…";
+    const v = await watch.waitUntilSecure(() => {
+      $("connectMsg").textContent = "If your phone asks for a code, enter the 6 digits shown on the watch.";
+    });
+    log("watch firmware " + v.fw + " (" + v.git + ")");
+    onConnected();
+    await loadSettings();
+    await syncAll();
+  } catch (e) {
+    $("connectMsg").textContent = e.name === "NotFoundError" ? "No watch picked." : e.message;
+    $("btnConnect").disabled = false;
+    watch.disconnect();
+  }
+});
+
+$("btnSyncAgain").addEventListener("click", () => syncAll());
+$("btnDone").addEventListener("click", () => watch.disconnect()); // the watch ends its session when we leave
+$("btnWeather").addEventListener("click", async () => {
+  try { const t = await pushWeather(); $("weatherInfo").textContent = "Sent: " + t; await refreshStatus(); }
+  catch (e) { $("weatherInfo").textContent = e.message; }
+});
+$("btnLocation").addEventListener("click", () => {
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    // Two decimals (~1 km) is plenty for a forecast and keeps the exact position off the watch.
+    const lat = pos.coords.latitude.toFixed(2), lon = pos.coords.longitude.toFixed(2);
+    try {
+      await watch.run("settings set lat " + lat);
+      await watch.run("settings set lon " + lon);
+      setting("lat").value = lat; setting("lon").value = lon;
+      $("weatherInfo").textContent = "Location saved (" + lat + ", " + lon + "). Fetching weather…";
+      $("weatherInfo").textContent = "Sent: " + await pushWeather();
+    } catch (e) { $("weatherInfo").textContent = e.message; }
+  }, (err) => { $("weatherInfo").textContent = "Location unavailable: " + err.message; },
+  { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+});
+$("btnWifi").addEventListener("click", async () => {
+  const ssid = $("ssid").value, pass = $("pass").value;
+  try { await watch.run("wifi set " + quote(ssid) + " " + quote(pass)); $("pass").value = ""; alert("Wi-Fi saved on the watch."); }
+  catch (e) { alert(e.message); }
+});
+
+if (!("bluetooth" in navigator) || !window.isSecureContext) {
+  show("unsupported"); show("connect", false);
+}
+</script>
+</body>
+</html>

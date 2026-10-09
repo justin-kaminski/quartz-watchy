@@ -227,6 +227,7 @@ struct Env {
     ScriptedConsole console{console_port};
     testkit::FakeNetStack net{clock};
     FakePortal portal;
+    testkit::FakePhoneLink phone{clock};
     Platform platform;
     BuildFeatures features;
     std::unique_ptr<App> app;
@@ -252,6 +253,14 @@ struct Env {
     }
 
     console::DeviceApi& api() { return app->device_api(); }
+
+    /// Phone link compiled in (BuildFeatures.phone + a link). Off by default so menu-navigation
+    /// tests keep their item positions.
+    void enable_phone() {
+        platform.phone = &phone;
+        features.phone = true;
+        app = std::make_unique<App>(platform, features);
+    }
 
     /// Power-on: RTC memory is garbage, the RTC counter restarts.
     hal::SleepPlan cold_boot() {

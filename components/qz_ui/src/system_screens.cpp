@@ -738,6 +738,74 @@ void render_provisioning(const WatchState& s, Canvas& c) noexcept {
     draw_hint(c, "BACK stop");
 }
 
+// ---- Phone sync ----
+void render_phone_sync(const WatchState& s, Canvas& c) noexcept {
+    const Font& small = gfx::font(FontId::kSmall);
+    const Font& medium = gfx::font(FontId::kMedium);
+    const Font& large = gfx::font(FontId::kLarge);
+    draw_title_bar(c, "Phone sync");
+    std::int32_t y = layout::kBodyTop + 6;
+    const auto line = [&](std::string_view text, const Font& f) {
+        center_text(c, baseline_at(y, f), text, f);
+        y += f.line_height + 2;
+    };
+    switch (s.phone_phase) {
+        case PhonePhase::kAdvertising:
+            line("On your phone, open", small);
+            line("the Quartz page and", small);
+            line("tap Connect, then pick", small);
+            y += 4;
+            (void)draw_box(c, y, layout::kBoxH);
+            text_in(c,
+                    layout::kPad + 4,
+                    layout::kContentW - 8,
+                    baseline_at(y + ((layout::kBoxH - layout::kBoxLineH) / 2), medium),
+                    s.phone_name,
+                    medium,
+                    Align::kCenter);
+            break;
+        case PhonePhase::kPairing:
+            if (s.phone_passkey == 0) {
+                line("Connecting...", medium);
+                break;
+            }
+            line("Enter this code", medium);
+            line("on your phone", medium);
+            y += 8;
+            {
+                TextBuilder<8> code;
+                code.put_uint(s.phone_passkey, 6);
+                line(code.view(), large);
+            }
+            y += 4;
+            line("Pairing happens once", small);
+            break;
+        case PhonePhase::kConnected:
+            line("Connected", medium);
+            y += 4;
+            line("Use the page on your", small);
+            line("phone; the watch keeps", small);
+            line("up while it is open", small);
+            break;
+        case PhonePhase::kIdle:
+            switch (s.op_phase) {
+                case OpPhase::kSucceeded:
+                    line("Sync complete", medium);
+                    break;
+                case OpPhase::kFailed:
+                    line("Phone sync stopped", medium);
+                    line(fmt::error_text(s.op_error), small);
+                    break;
+                case OpPhase::kRunning:
+                case OpPhase::kIdle:
+                    line("Starting...", medium);
+                    break;
+            }
+            break;
+    }
+    draw_hint(c, "BACK stop");
+}
+
 // ---- Diagnostics ----
 constexpr std::array<std::string_view, tuning::kDiagPageCount> kDiagNames{
     "Battery", "Time", "Sync", "Wakes", "Sensors", "Self-test"};
@@ -1121,6 +1189,9 @@ void render_system_screen(ScreenId id,
         case ScreenId::kStatusOverlay:
             render_status(state, canvas);
             break;
+        case ScreenId::kPhoneSync:
+            render_phone_sync(state, canvas);
+            break;
         case ScreenId::kFace:
         case ScreenId::kMenu:
         case ScreenId::kTimeDateEditor:
@@ -1129,6 +1200,7 @@ void render_system_screen(ScreenId id,
         case ScreenId::kWeatherSettings:
         case ScreenId::kLocationEditor:
         case ScreenId::kStepGoalEditor:
+        case ScreenId::kPhone:
         case ScreenId::kCount:
             break;
     }

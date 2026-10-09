@@ -50,6 +50,11 @@ inline constexpr std::int64_t kTetherPollUs = 1 * kUs;     ///< ARCHITECTURE.md 
 inline constexpr std::int64_t kTetherReceiveMaxUs = 25'000; ///< [TUNE]
 inline constexpr std::int64_t kProvPollUs = 200'000;        ///< portal service period [TUNE]
 inline constexpr std::uint32_t kPortalPollMs = 20;          ///< blocking time of one portal poll
+/// Phone link wait slice: the loop cannot light-sleep while BLE runs, so buttons are polled.
+inline constexpr std::int64_t kPhonePollUs = 25'000;     ///< [TUNE]
+inline constexpr std::uint16_t kForgetVibrationMs = 120; ///< "phones forgotten" confirmation
+/// How long the PhoneSync screen shows how a session ended before the face returns. [TUNE]
+inline constexpr std::int64_t kPhoneResultUs = 5 * kUs;
 inline constexpr std::uint16_t kGoalVibrationMs = 200;      ///< goal reached pulse [TUNE]
 inline constexpr std::int16_t kTempFullRefreshDc = 100;     ///< ARCHITECTURE.md section 14: 10 C
 inline constexpr std::uint16_t kProvisioningTtlS = 300;     ///< conn::Provisioning expiry
@@ -121,6 +126,8 @@ public:
     [[nodiscard]] console::WeatherInfo weather() const override;
     Status fake_weather(const model::WeatherReport& report) override;
     Status clear_weather() override;
+    Status push_weather(const model::WeatherReport& report) override;
+    Status forget_phones() override;
     [[nodiscard]] std::optional<FixedString<32>> wifi_ssid() const override;
     [[nodiscard]] bool wifi_has_password() const override;
     Status set_wifi(std::string_view ssid, std::string_view password) override;
@@ -191,6 +198,7 @@ private:
     [[nodiscard]] time::UnixSeconds display_utc_s() const noexcept;
     [[nodiscard]] std::optional<time::DayNumber> local_day(time::UnixSeconds utc_s) const noexcept;
     [[nodiscard]] bool radio_compiled() const noexcept;
+    [[nodiscard]] bool phone_compiled() const noexcept;
     [[nodiscard]] model::WeatherFreshness weather_freshness(time::UnixSeconds now_s) const noexcept;
 
     // ---- actions.cpp ----
@@ -204,6 +212,11 @@ private:
     Status start_provisioning_impl(FixedString<32>& ssid_out, std::uint16_t& expires_s) noexcept;
     void stop_provisioning_impl() noexcept;
     void poll_provisioning() noexcept;
+    Status start_phone_impl() noexcept;
+    void stop_phone_impl(conn::PhoneEnd why) noexcept;
+    /// Serves the phone link for up to `wait_us` (capped to the button poll slice); ends the
+    /// session when conn::PhoneSession says so.
+    void poll_phone(std::int64_t wait_us) noexcept;
     Status vibrate_impl(std::uint16_t ms) noexcept;
     Status run_selftests_impl(std::string_view filter, console::JsonWriter* out) noexcept;
     Status apply_settings_object(const settings::Settings& next) noexcept;
@@ -244,6 +257,8 @@ private:
     ui::Ui ui_;
     ui::GestureRecognizer recognizer_;
     conn::Provisioning prov_;
+    conn::PhoneSession phone_;
+    FixedString<11> phone_name_;
     console::Registry registry_;
     console::Dispatcher dispatcher_;
     time::TimeZone tz_;
@@ -264,6 +279,10 @@ private:
     bool force_full_next_ = false;
     bool accel_ok_ = false;
     bool prov_active_ = false;
+    bool phone_active_ = false;
+    hal::PhoneLinkState phone_seen_ = hal::PhoneLinkState::kOff; ///< last state rendered
+    std::uint32_t phone_passkey_seen_ = 0;
+    std::int64_t phone_ended_us_ = 0; ///< when the last session ended (or failed to start)
 
     std::array<char, console::kMaxRequestBytes + 1> request_{};
     std::array<char, console::kMaxResponseBytes> response_{};

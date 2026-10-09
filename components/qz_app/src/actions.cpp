@@ -111,6 +111,27 @@ void Core::execute(const ui::Action& action) noexcept {
         case ui::ActionKind::kStopProvisioning:
             stop_provisioning_impl();
             break;
+        case ui::ActionKind::kStartPhoneSync: {
+            const Status s = start_phone_impl();
+            if (!s) {
+                op_phase_ = ui::OpPhase::kFailed;
+                op_error_ = s.error().code;
+                phone_ended_us_ = p_.clock.rtc_us();
+            }
+            break;
+        }
+        case ui::ActionKind::kStopPhoneSync:
+            stop_phone_impl(conn::PhoneEnd::kNone);
+            break;
+        case ui::ActionKind::kForgetPhones: {
+            const Status s = forget_phones();
+            if (s && rtc_.settings.vibration) {
+                (void)vibrate_impl(wiring::kForgetVibrationMs);
+            } else if (!s) {
+                note_error(s.error());
+            }
+            break;
+        }
         case ui::ActionKind::kFactoryReset: {
             const Status s = factory_reset_impl();
             if (!s) {
@@ -172,7 +193,14 @@ Status Core::apply_setting_impl(settings::Key key, std::string_view value) noexc
         !radio_compiled()) {
         return Errc::kUnsupported; // BuildFeatures.radio = false forces Off
     }
-    return apply_settings_object(next);
+    if (key == settings::Key::kPhoneSync && next.phone_sync && !phone_compiled()) {
+        return Errc::kUnsupported;
+    }
+    QZ_RETURN_IF_ERROR(apply_settings_object(next));
+    if (!rtc_.settings.phone_sync) {
+        stop_phone_impl(conn::PhoneEnd::kNone); // off means off, even mid-session
+    }
+    return ok();
 }
 
 // ---- time ----------------------------------------------------------------------------------
@@ -198,7 +226,14 @@ Status Core::set_time_local(const time::CivilDate& date, const time::CivilTime& 
 // ---- factory reset -------------------------------------------------------------------------
 
 Status Core::factory_reset_impl() noexcept {
-    const Status erased = settings_store_.erase_all(); // every qz_* namespace
+    stop_phone_impl(conn::PhoneEnd::kNone);
+    Status erased = settings_store_.erase_all(); // every qz_* namespace
+    if (phone_compiled()) {
+        const Status bonds = p_.phone->forget_bonds(); // the bond store is NimBLE's namespace
+        if (erased && !bonds) {
+            erased = bonds;
+        }
+    }
     // RAM is reset even if the flash erase failed: the owner asked for a clean device.
     const time::TimeKeeperState keep = rtc_.time; // the RTC timer keeps running: time is kept
     const std::uint32_t boots = rtc_.header.boot_count;
@@ -239,6 +274,9 @@ Status Core::run_sync(bool want_time, bool want_weather) noexcept {
     if (!power_.decision().radio_allowed || power_.level() != model::PowerLevel::kNormal) {
         return Errc::kBatteryLow;
     }
+    if (phone_active_) {
+        return Errc::kBusy; // one radio session at a time
+    }
     if (!has_creds_flag()) {
         return Errc::kNoCredentials;
     }
@@ -271,7 +309,7 @@ Status Core::start_provisioning_impl(FixedString<32>& ssid_out, std::uint16_t& e
     if (!power_.decision().radio_allowed) {
         return Errc::kBatteryLow;
     }
-    if (prov_active_) {
+    if (prov_active_ || phone_active_) {
         return Errc::kBusy;
     }
     prov_.begin(p_.clock.rtc_us());
@@ -316,6 +354,103 @@ void Core::poll_provisioning() noexcept {
     (void)p_.portal->poll(wiring::kPortalPollMs); // errors end by expiry; nothing to recover
     if (prov_.completed()) {
         stop_provisioning_impl();
+    }
+}
+
+// ---- phone sync (ARCHITECTURE.md section 13a) ------------------------------------------------
+
+Status Core::start_phone_impl() noexcept {
+    if (!phone_compiled()) {
+        return Errc::kUnsupported;
+    }
+    if (!rtc_.settings.phone_sync) {
+        return Errc::kInvalidState; // switched off in Menu > Phone
+    }
+    if (!power_.decision().radio_allowed) {
+        return Errc::kBatteryLow;
+    }
+    if (phone_active_) {
+        return ok();
+    }
+    if (prov_active_) {
+        return Errc::kBusy;
+    }
+    phone_name_ = conn::device_name(p_.system.chip_id());
+    QZ_RETURN_IF_ERROR(p_.phone->start(phone_name_.view()));
+    phone_.begin(p_.clock.rtc_us());
+    phone_active_ = true;
+    phone_seen_ = hal::PhoneLinkState::kOff;
+    phone_passkey_seen_ = 0;
+    op_phase_ = ui::OpPhase::kRunning;
+    w_.flags |= model::kWakeFlagRadio;
+    return ok();
+}
+
+void Core::stop_phone_impl(conn::PhoneEnd why) noexcept {
+    if (!phone_active_) {
+        return;
+    }
+    p_.phone->stop();
+    phone_ended_us_ = p_.clock.rtc_us();
+    const bool synced = phone_.was_secure();
+    phone_.end();
+    phone_active_ = false;
+    switch (why) {
+        case conn::PhoneEnd::kNone: // stopped by the owner (BACK, setting off, wake end)
+            op_phase_ = synced ? ui::OpPhase::kSucceeded : ui::OpPhase::kIdle;
+            break;
+        case conn::PhoneEnd::kPhoneLeft:
+            op_phase_ = ui::OpPhase::kSucceeded;
+            break;
+        case conn::PhoneEnd::kIdle:
+        case conn::PhoneEnd::kMaxDuration:
+            op_phase_ = synced ? ui::OpPhase::kSucceeded : ui::OpPhase::kFailed;
+            op_error_ = Errc::kTimeout;
+            break;
+        case conn::PhoneEnd::kNoPhone:
+            op_phase_ = ui::OpPhase::kFailed;
+            op_error_ = Errc::kTimeout;
+            break;
+    }
+}
+
+void Core::poll_phone(std::int64_t wait_us) noexcept {
+    if (!phone_active_) {
+        return;
+    }
+    const std::int64_t slice_us = std::clamp<std::int64_t>(wait_us, 0, wiring::kPhonePollUs);
+    const Result<std::size_t> line =
+        p_.phone->receive_line(request_, static_cast<std::uint32_t>(slice_us / 1000));
+    const std::int64_t now = p_.clock.rtc_us();
+    if (line && *line > 0) {
+        phone_.note_command(now);
+        last_input_us_ = now; // a working phone keeps the session (and the screen) alive
+        const std::string_view reply = dispatcher_.handle_line(
+            std::span<char>(request_.data(), *line), response_, console::Origin::kPhone);
+        p_.phone->send_line(reply);
+    } else if (!line) {
+        std::array<char, 160> out{};
+        const std::size_t n = console::format_err(out, "", line.error(), "line too long");
+        if (n > 0) {
+            p_.phone->send_line(std::string_view(out.data(), n));
+        }
+    }
+    if (!phone_active_) {
+        return; // the command itself ended the session (e.g. `settings set phone off`)
+    }
+    const hal::PhoneLinkState link = p_.phone->state();
+    const conn::PhoneEnd end = phone_.tick(link, now);
+    if (end != conn::PhoneEnd::kNone) {
+        stop_phone_impl(end);
+    }
+    const hal::PhoneLinkState shown = phone_active_ ? link : hal::PhoneLinkState::kOff;
+    const std::uint32_t passkey = phone_active_ ? p_.phone->passkey() : 0;
+    if (shown != phone_seen_ || passkey != phone_passkey_seen_) {
+        phone_seen_ = shown;
+        phone_passkey_seen_ = passkey;
+        if (ui_.current() == ui::ScreenId::kPhoneSync) {
+            (void)render_and_present(false, 0); // the code must appear while the phone asks
+        }
     }
 }
 

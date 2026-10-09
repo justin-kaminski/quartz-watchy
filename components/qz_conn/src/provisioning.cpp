@@ -232,14 +232,7 @@ Provisioning::Provisioning(hal::System& system, FormSink& sink) noexcept
 
 void Provisioning::begin(std::int64_t now_rtc_us) noexcept {
     end();
-    constexpr std::array<char, 16> kHex{
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-    const std::uint64_t id = system_.chip_id();
-    std::array<char, 12> ssid{'Q', 'u', 'a', 'r', 't', 'z', '-', 0, 0, 0, 0, 0};
-    for (std::size_t i = 0; i < 4; ++i) {
-        ssid[7 + i] = kHex[(id >> (12U - (4U * i))) & 0xFU];
-    }
-    (void)ssid_.assign(std::string_view{ssid.data(), 11}); // 11 chars always fit FixedString<11>
+    ssid_ = device_name(system_.chip_id());
 
     std::array<char, kPasswordLength> pw{};
     for (char& c : pw) {

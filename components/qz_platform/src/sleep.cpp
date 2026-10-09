@@ -504,7 +504,8 @@ hal::LightSleepWake IdfSleep::light_sleep_once(const hal::SleepPlan& plan) {
     }
     const std::int64_t deadline_us = has_timer ? esp_rtc_get_time_us() + plan.timer_us : 0;
 
-    const bool poll_only = tethered_ || (has_timer && plan.timer_us < kMinLightSleepUs);
+    const bool poll_only =
+        tethered_ || radio_active_ || (has_timer && plan.timer_us < kMinLightSleepUs);
     if (poll_only) {
         return poll_until(deadline_us, has_timer, arm);
     }

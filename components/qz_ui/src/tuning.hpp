@@ -16,6 +16,8 @@ inline constexpr std::int64_t kIdleSyncMs =
     60'000; ///< SyncNow: covers the sync time budget [ASSUMED]
 inline constexpr std::int64_t kIdleProvisioningMs =
     300'000; ///< phone-side setup takes minutes [ASSUMED]
+/// PhoneSync: each command from the phone counts as input, so this only ends abandoned sessions.
+inline constexpr std::int64_t kIdlePhoneSyncMs = 180'000; ///< [TUNE]
 
 // ---- navigation ----
 inline constexpr std::size_t kStackDepth = 6; ///< Face, Menu, WeatherSettings, Location + slack

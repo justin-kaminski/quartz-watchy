@@ -12,7 +12,7 @@ namespace {
 
 constexpr char kWordSeparator = ' ';
 constexpr char kIdMarker = '#'; // a request starting with it is parsed as an id, never a command
-constexpr unsigned kKnownFlags = kFlagSensitive | kFlagDestructive | kFlagNeedsRadio;
+constexpr unsigned kKnownFlags = kFlagSensitive | kFlagDestructive | kFlagNeedsRadio | kFlagUsbOnly;
 
 /// A word the tokenizer can produce unquoted: printable ASCII, no space, no quote.
 constexpr bool is_name_char(char c) noexcept {

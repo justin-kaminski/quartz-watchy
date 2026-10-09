@@ -84,10 +84,10 @@ struct Rig {
         EXPECT_TRUE(status.has_value());
     }
 
-    Reply run(std::string_view line) {
+    Reply run(std::string_view line, Origin origin = Origin::kUsb) {
         test::ExactBuffer request(line);
         std::vector<char> response(kMaxResponseBytes);
-        Reply reply = split_reply(dispatcher.handle_line(request.span(), response));
+        Reply reply = split_reply(dispatcher.handle_line(request.span(), response, origin));
         expect_well_formed(reply);
         return reply;
     }
@@ -229,6 +229,11 @@ const OkCase kOkCases[] = {
      "weather fake 215 partly_cloudy 250 120",
      R"j({"report":{"temp_dc":215,"condition":"partly_cloudy","high_dc":250,"low_dc":120,"fetched":1700000000,"faked":true},"age_s":0,"freshness":"fresh"})j",
      with_clock},
+    {"weather push",
+     "weather push 215 rain 250 120",
+     R"j({"report":{"temp_dc":215,"condition":"rain","high_dc":250,"low_dc":120,"fetched":1700000000,"faked":false},"age_s":0,"freshness":"fresh"})j",
+     with_clock},
+    {"phone forget", "phone forget", R"j({"forgotten":true})j"},
     {"weather clear", "weather clear", R"j({"report":null,"age_s":0,"freshness":"hidden"})j"},
     {"weather fetch", "weather fetch", R"j({"report":null,"age_s":0,"freshness":"hidden"})j"},
     {"wifi status",
@@ -306,6 +311,8 @@ const ErrCase kErrCases[] = {
     {"battery fake", "battery fake 100", "bad_args"},
     {"weather get", "weather get now", "bad_args"},
     {"weather fake", "weather fake 215 rain 250", "bad_args"},
+    {"weather push", "weather push 215 rain 250 120", "no_time"},
+    {"phone forget", "phone forget now", "bad_args"},
     {"weather clear", "weather clear", "io", fail_io},
     {"weather fetch", "weather fetch", "timeout", fail_timeout},
     {"wifi status", "wifi status all", "bad_args"},
@@ -422,6 +429,7 @@ TEST(Catalog, RegistersTheWholeV1Catalog) {
                                          "battery get",    "battery fake",
                                          "weather get",    "weather fake",
                                          "weather clear",  "weather fetch",
+                                         "weather push",   "phone forget",
                                          "wifi status",    "wifi set",
                                          "wifi clear",     "sync now",
                                          "sync status",    "provision start",
@@ -464,18 +472,22 @@ TEST(Catalog, RegisteringTwiceIsRejectedAsDuplicate) {
 TEST(Catalog, FlagsFollowTheCatalogLegend) {
     Registry registry;
     ASSERT_TRUE(register_builtin_commands(registry).has_value());
-    // S sensitive, D destructive, R needs radio (ARCHITECTURE.md section 16). Every wifi command is
-    // sensitive: nothing about credentials is ever logged or echoed.
+    // S sensitive, D destructive, R needs radio, U USB console only (ARCHITECTURE.md section 16).
+    // Every wifi command is sensitive: nothing about credentials is ever logged or echoed.
     const std::map<std::string_view, std::uint8_t> special = {
         {"settings reset", kFlagDestructive},
         {"steps reset-today", kFlagDestructive},
-        {"weather fetch", kFlagNeedsRadio},
+        {"weather fetch", kFlagNeedsRadio | kFlagUsbOnly},
         {"wifi status", kFlagSensitive},
         {"wifi set", kFlagSensitive},
         {"wifi clear", kFlagSensitive | kFlagDestructive},
-        {"sync now", kFlagNeedsRadio},
-        {"provision start", kFlagNeedsRadio},
-        {"factory-reset", kFlagDestructive},
+        {"sync now", kFlagNeedsRadio | kFlagUsbOnly},
+        {"provision start", kFlagNeedsRadio | kFlagUsbOnly},
+        {"factory-reset", kFlagDestructive | kFlagUsbOnly},
+        {"phone forget", kFlagDestructive},
+        {"selftest run", kFlagUsbOnly},
+        {"sleep", kFlagUsbOnly},
+        {"reboot", kFlagUsbOnly},
     };
     for (const Command& command : registry.all()) {
         const auto found = special.find(command.name);
@@ -508,8 +520,8 @@ TEST(Catalog, HelpListsEveryCommandAndDescribesOne) {
     EXPECT_EQ(
         one.json,
         R"j({"name":"wifi set","usage":"wifi set <ssid> <password>","help":"store credentials; \"\" as password for an open network","flags":"S"})j");
-    EXPECT_TRUE(rig.run("help factory-reset").json.contains(R"("flags":"D")"));
-    EXPECT_NE(rig.run("help sync now").json.find(R"("flags":"R")"), std::string::npos);
+    EXPECT_TRUE(rig.run("help factory-reset").json.contains(R"("flags":"DU")"));
+    EXPECT_NE(rig.run("help sync now").json.find(R"("flags":"RU")"), std::string::npos);
     // A family word lists its members.
     const Reply family = rig.run("help wifi");
     EXPECT_EQ(family.status, "OK");
@@ -1049,6 +1061,47 @@ TEST(CatalogActuators, RebootAndFactoryResetRequestTheActionOnce) {
     }
     ASSERT_EQ(rig.run("factory-reset confirm").status, "OK");
     EXPECT_TRUE(rig.api.factory_reset_done);
+}
+
+// ---- phone origin -----------------------------------------------------------------------------
+
+TEST(CatalogOrigin, PhoneLinkRefusesUsbOnlyCommandsBeforeRunningThem) {
+    Rig rig;
+    for (const Command& command : rig.registry.all()) {
+        if ((command.flags & kFlagUsbOnly) == 0) {
+            continue;
+        }
+        SCOPED_TRACE(command.name);
+        const Reply reply = rig.run(command.name, Origin::kPhone);
+        EXPECT_EQ(reply.code, "unsupported");
+        EXPECT_TRUE(reply.json.contains("USB console only")) << reply.json;
+    }
+    EXPECT_FALSE(rig.api.factory_reset_done);
+    EXPECT_EQ(rig.run("factory-reset confirm", Origin::kPhone).code, "unsupported");
+    EXPECT_FALSE(rig.api.factory_reset_done);
+}
+
+TEST(CatalogWeather, PushTakesTheObservationTimeWithinLimits) {
+    Rig rig;
+    with_clock(rig.api);
+    const Reply observed = rig.run("weather push 215 rain 250 120 1699999000");
+    ASSERT_EQ(observed.status, "OK") << observed.line;
+    EXPECT_TRUE(observed.json.contains(R"("fetched":1699999000)")) << observed.json;
+    // Slightly ahead of the watch (phone clock skew) is clamped to now.
+    EXPECT_TRUE(rig.run("weather push 215 rain 250 120 1700000100")
+                    .json.contains(R"("fetched":1700000000)"));
+    EXPECT_EQ(rig.run("weather push 215 rain 250 120 1699970000").code, "bad_args"); // > 6 h old
+    EXPECT_EQ(rig.run("weather push 215 rain 250 120 1700001000").code, "bad_args"); // future
+    EXPECT_EQ(rig.run("weather push 215 rain 120 250").code, "bad_args"); // high below low
+    EXPECT_EQ(rig.run("weather push 215 rain 250").code, "bad_args");
+}
+
+TEST(CatalogOrigin, PhoneLinkRunsEverydayCommands) {
+    Rig rig;
+    EXPECT_EQ(rig.run("version", Origin::kPhone).status, "OK");
+    EXPECT_EQ(rig.run("settings set units f", Origin::kPhone).status, "OK");
+    EXPECT_EQ(rig.run("phone forget", Origin::kPhone).status, "OK");
+    EXPECT_EQ(rig.api.phones_forgotten, 1);
 }
 
 // ---- framing --------------------------------------------------------------------------------

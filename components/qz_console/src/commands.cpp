@@ -47,7 +47,7 @@ std::array<std::span<const Command>, kTableCount> tables() noexcept {
              detail::platform_commands()}};
 }
 
-/// "S", "D", "R" letters in a fixed order (ARCHITECTURE.md section 16 flag legend).
+/// "S", "D", "R", "U" letters in a fixed order (ARCHITECTURE.md section 16 flag legend).
 std::string_view flag_letters(std::span<char> out, const Command& command) noexcept {
     std::size_t len = 0;
     if ((command.flags & kFlagSensitive) != 0) {
@@ -58,6 +58,9 @@ std::string_view flag_letters(std::span<char> out, const Command& command) noexc
     }
     if ((command.flags & kFlagNeedsRadio) != 0) {
         out[len++] = 'R';
+    }
+    if ((command.flags & kFlagUsbOnly) != 0) {
+        out[len++] = 'U';
     }
     return {out.data(), len};
 }

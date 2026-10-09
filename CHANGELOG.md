@@ -6,6 +6,19 @@ gate in `docs/RELEASE.md` passes. The firmware version is `version.txt`.
 
 ## [Unreleased]
 
+### Added
+- Phone sync over Bluetooth LE (radio image): Menu > Phone > Sync with phone starts a time-limited,
+  passkey-paired, bonded link to the companion page `web/phone/index.html` (Web Bluetooth). The page
+  sets time and zone from the phone, edits settings and the face, pushes Open-Meteo weather it
+  fetched itself, and can store Wi-Fi credentials. The stack is powered only during a session.
+  Switch off in Menu > Phone, or compile out with `CONFIG_QZ_PHONE=n` (the offline image has no
+  Bluetooth at all).
+- Console: `weather push`, `phone forget`; flag U (USB only) for commands refused over the phone.
+
+### Fixed
+- Taps made while the panel refreshed were lost; they are now latched and delivered.
+- Deep sleep was refused on battery (GPIO0 read low in the RTC domain); see docs/STATUS.md.
+
 ## [0.1.0] - 2026-10-06 (first complete build, unverified on hardware)
 
 **Nothing in this release has run on a real Watchy v3.** It builds warning-free in both firmware

@@ -180,4 +180,37 @@ private:
     std::array<char, 2048> page_{};
 };
 
+/// "Quartz-XXXX" from the low 16 bits of the chip id: the provisioning SSID and the Bluetooth name
+/// match, so the owner recognizes the watch in either list.
+[[nodiscard]] FixedString<11> device_name(std::uint64_t chip_id) noexcept;
+
+/// Why a phone-sync session ends (ARCHITECTURE.md section 13a).
+enum class PhoneEnd : std::uint8_t {
+    kNone = 0,
+    kNoPhone,     ///< no secure connection within the connect window
+    kIdle,        ///< secure, but no command for the idle window
+    kPhoneLeft,   ///< was secure, the phone disconnected: the normal end
+    kMaxDuration, ///< hard cap, whatever happens
+};
+
+/// Phone-sync session timing. The link itself lives in hal::PhoneLink; this decides when to stop
+/// it so the radio never stays up unattended. Pure; not thread-safe.
+class PhoneSession {
+public:
+    void begin(std::int64_t now_rtc_us) noexcept;
+    void end() noexcept;
+    /// Feeds the link state seen by the app loop; returns why the session must end, if it must.
+    PhoneEnd tick(hal::PhoneLinkState link, std::int64_t now_rtc_us) noexcept;
+    /// A request line arrived over the secure link.
+    void note_command(std::int64_t now_rtc_us) noexcept;
+    [[nodiscard]] bool active() const noexcept { return active_; }
+    [[nodiscard]] bool was_secure() const noexcept { return was_secure_; }
+
+private:
+    std::int64_t begin_rtc_us_ = 0;
+    std::int64_t last_activity_us_ = 0;
+    bool active_ = false;
+    bool was_secure_ = false;
+};
+
 } // namespace qz::conn

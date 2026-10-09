@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <optional>
 #include <span>
@@ -572,6 +573,48 @@ private:
     bool running_ = false;
     std::uint32_t starts_ = 0;
     std::uint32_t stops_ = 0;
+};
+
+/// Scriptable phone link. Lines are delivered only while the state is kSecure (as on the device);
+/// `hook` runs at the start of every receive_line() with the 1-based call count, so tests can
+/// script connect / pair / disconnect at a given point of the app loop.
+class FakePhoneLink final : public hal::PhoneLink {
+public:
+    FakePhoneLink() = default;
+    /// With a clock, an empty receive_line() consumes its timeout in virtual time.
+    explicit FakePhoneLink(VirtualClock& clock) : clock_(&clock) {}
+    explicit FakePhoneLink(VirtualClock&&) = delete; // would dangle
+    Status start(std::string_view name) override;
+    void stop() override;
+    [[nodiscard]] hal::PhoneLinkState state() const override;
+    [[nodiscard]] std::uint32_t passkey() const override;
+    Result<std::size_t> receive_line(std::span<char> out, std::uint32_t timeout_ms) override;
+    void send_line(std::string_view line) override;
+    Status forget_bonds() override;
+    [[nodiscard]] std::uint32_t radio_init_count() const override;
+
+    void set_state(hal::PhoneLinkState state); ///< ignored while stopped
+    void set_passkey(std::uint32_t passkey);
+    void push_request(std::string line);
+    void fail_next_start(Error error);
+    [[nodiscard]] const std::vector<std::string>& sent() const;
+    [[nodiscard]] bool running() const;
+    [[nodiscard]] std::string_view name() const;
+    [[nodiscard]] std::uint32_t forget_count() const;
+    [[nodiscard]] std::uint32_t receive_count() const;
+    std::function<void(std::uint32_t)> hook;
+
+private:
+    VirtualClock* clock_ = nullptr;
+    std::deque<std::string> requests_;
+    std::vector<std::string> sent_;
+    std::optional<Error> start_failure_;
+    std::string name_;
+    hal::PhoneLinkState state_ = hal::PhoneLinkState::kOff;
+    std::uint32_t passkey_ = 0;
+    std::uint32_t inits_ = 0;
+    std::uint32_t forgets_ = 0;
+    std::uint32_t receives_ = 0;
 };
 
 } // namespace qz::testkit
