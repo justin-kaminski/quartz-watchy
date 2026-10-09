@@ -150,7 +150,8 @@ sync list shows Time, Time zone and Weather done (Weather needs a location: "Use
 location"); the watch face shows the phone's time; changing a setting on the page changes the watch.
 Then: tap Done -> the watch shows "Sync complete" and its Bluetooth is off. Start again: no code is
 asked this time (bonded). Start once more and do nothing: after 2 min the watch says it stopped.
-Run three sessions in a row (stack re-initialization).
+Run three sessions in a row (stack re-initialization). Without a phone, `tools/phone_link_test.py`
+runs the same pairing and command checks from a Linux PC with Bluetooth (BlueZ).
 Report: pass/fail per item, phone model, anything confusing, and (with a profiler, B9 setup) the
 current while waiting for the phone and while connected.
 

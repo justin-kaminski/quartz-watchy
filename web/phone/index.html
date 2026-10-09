@@ -318,10 +318,12 @@ async function renderSettings() {
       s.value = v;
       if (s.key === "phone" && v === "off") setPill("Phone sync turned off", false);
     };
+    // Booleans come back as JSON true/false but are set with their choice words (on/off).
+    const current = typeof s.value === "boolean" ? (s.value ? "on" : "off") : String(s.value);
     if (Array.isArray(s.choices) && s.choices.length) {
-      box.append(rowWithSelect(label, s.help, s.choices.map((c) => [c, c]), String(s.value), apply));
+      box.append(rowWithSelect(label, s.help, s.choices.map((c) => [c, c]), current, apply));
     } else {
-      box.append(rowWithInput(label, s.help, String(s.value), apply));
+      box.append(rowWithInput(label, s.help, current, apply));
     }
   }
 }

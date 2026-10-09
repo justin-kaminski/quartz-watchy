@@ -264,8 +264,10 @@ std::int64_t Core::tethered_loop() noexcept {
             next_invalid_tick = now + PlannerTuning{}.invalid_time_tick_us;
             tether_tick(wp);
         }
-        if (!screen_is_passive() && !recognizer_.any_pressed() &&
-            ui_.idle_expired(p_.clock.rtc_us(), last_input_us_)) {
+        const bool phone_done = ui_.current() == ui::ScreenId::kPhoneSync && !phone_active_ &&
+                                p_.clock.rtc_us() - phone_ended_us_ >= wiring::kPhoneResultUs;
+        if (phone_done || (!screen_is_passive() && !recognizer_.any_pressed() &&
+                           ui_.idle_expired(p_.clock.rtc_us(), last_input_us_))) {
             return_to_face();
         }
     }

@@ -803,7 +803,9 @@ void render_phone_sync(const WatchState& s, Canvas& c) noexcept {
             }
             break;
     }
-    draw_hint(c, "BACK stop");
+    const bool finished = s.phone_phase == PhonePhase::kIdle &&
+                          (s.op_phase == OpPhase::kSucceeded || s.op_phase == OpPhase::kFailed);
+    draw_hint(c, finished ? "BACK close" : "BACK stop");
 }
 
 // ---- Diagnostics ----

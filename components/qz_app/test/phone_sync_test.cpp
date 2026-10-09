@@ -88,6 +88,51 @@ TEST(PhoneSync, MenuStartsASessionThatPairsSyncsAndEndsWhenThePhoneLeaves) {
         << "the result shows for seconds, not the 3 min screen timeout";
 }
 
+TEST(PhoneSync, TetheredSessionReturnsToTheFaceShortlyAfterThePhoneLeaves) {
+    Env env;
+    env.enable_phone();
+    (void)env.boot_with_time();
+    env.io.set_usb(true, true);
+    for (const char* line : {"btn menu",
+                             "btn down",
+                             "btn down",
+                             "btn down",
+                             "btn down",
+                             "btn down",
+                             "btn down",
+                             "btn down",
+                             "btn menu",
+                             "btn menu"}) {
+        env.console_port.push_request(line);
+    }
+    std::int64_t left_at = -1;
+    std::int64_t face_at = -1;
+    env.phone.hook = [&](std::uint32_t n) {
+        if (n == 3) {
+            env.phone.set_state(PhoneLinkState::kSecure);
+        } else if (n == 6) {
+            env.phone.set_state(PhoneLinkState::kAdvertising);
+            left_at = env.clock.rtc_us();
+        }
+    };
+    const std::int64_t unplug_at = env.clock.rtc_us() + 30 * kUs;
+    env.console.hook = [&](std::uint32_t /*n*/) {
+        if (left_at >= 0 && face_at < 0 && env.api().current_screen() == "face") {
+            face_at = env.clock.rtc_us();
+        }
+        if (env.clock.rtc_us() >= unplug_at) {
+            env.io.set_usb(false, false);
+        }
+    };
+    (void)env.wake_on(usb_wake(), 20 * kUs);
+    env.phone.hook = nullptr;
+    env.console.hook = nullptr;
+    ASSERT_GE(left_at, 0) << "the session never started";
+    ASSERT_GE(face_at, 0) << "the result screen never closed while tethered";
+    EXPECT_LT(face_at - left_at, 8 * kUs); // 5 s result + the ~2 s full refresh back to the face
+    EXPECT_FALSE(env.phone.running());
+}
+
 TEST(PhoneSync, NobodyConnectsAndTheRadioStopsAfterTheConnectWindow) {
     Env env;
     env.enable_phone();

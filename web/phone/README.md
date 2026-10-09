@@ -10,11 +10,15 @@ Web Bluetooth and to `api.open-meteo.com` for weather; nothing else.
 - A secure context: the page must be served over `https://` (or from `http://localhost`). Opening
   the file directly is not enough on Android.
 
-## Hosting options
-- Any static HTTPS host (GitHub Pages from a public repository that holds just this file,
-  Cloudflare Pages, Netlify). The page contains no secrets.
-- Local testing on a desktop: `python3 -m http.server -d web/phone 8000`, then open
-  `http://localhost:8000` in Chrome.
+## Hosting
+- **GitHub Pages (intended):** `.github/workflows/pages.yml` deploys this folder on pushes to main.
+  It is dormant while the repository is private; after making it public, enable Settings > Pages >
+  Source: "GitHub Actions". The page contains no secrets.
+- **Before that, on the phone over USB:** with USB debugging on, run
+  `python3 -m http.server -d web/phone 8000` on the PC and `adb reverse tcp:8000 tcp:8000`, then open
+  `http://localhost:8000` in Chrome on the phone (localhost counts as secure).
+- **Desktop Chrome:** the same `http.server` command, then `http://localhost:8000`.
+- **PC without a browser:** `tools/phone_link_test.py` pairs and exercises the link over BlueZ.
 
 ## Use
 1. Watch: Menu > Phone > Sync with phone.
