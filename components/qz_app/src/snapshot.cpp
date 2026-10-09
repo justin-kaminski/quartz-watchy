@@ -137,8 +137,10 @@ model::WeatherFreshness Core::weather_freshness(time::UnixSeconds now_s) const n
     if (report.valid == 0) {
         return model::WeatherFreshness::kHidden;
     }
-    if (rtc_.settings.connectivity != model::ConnectivityMode::kTimeWeather && report.faked == 0) {
-        return model::WeatherFreshness::kHidden; // mode != TimeWeather hides real reports
+    // "Time only" means the owner turned weather off: hide real reports. Off only means no Wi-Fi;
+    // a report pushed by the phone (section 13a) still shows, and ages out on its own.
+    if (rtc_.settings.connectivity == model::ConnectivityMode::kTimeOnly && report.faked == 0) {
+        return model::WeatherFreshness::kHidden;
     }
     return weather::freshness(report, now_s, rtc_.settings.weather_interval_min, keeper_.valid());
 }

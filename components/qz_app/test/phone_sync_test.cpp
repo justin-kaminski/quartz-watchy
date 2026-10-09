@@ -209,6 +209,23 @@ TEST(PhoneSync, CompiledOutRefusesTheSettingAndHasNoLink) {
     EXPECT_EQ(env.api().forget_phones().error().code, Errc::kUnsupported);
 }
 
+TEST(PhoneSync, PushedWeatherShowsWithWifiOffAndHidesWhenWeatherIsTurnedOff) {
+    Env env;
+    env.enable_phone();
+    (void)env.boot_with_time();
+    ASSERT_EQ(env.api().current_settings().connectivity, model::ConnectivityMode::kOff);
+    model::WeatherReport report;
+    report.temp_dc = 180;
+    report.condition = model::WeatherCondition::kRain;
+    report.fetched_utc = env.api().time_info().utc_us / time::kUsPerSecond;
+    ASSERT_TRUE(static_cast<bool>(env.api().push_weather(report)));
+    EXPECT_EQ(env.api().weather().freshness, model::WeatherFreshness::kFresh)
+        << "Off means no Wi-Fi, not no weather";
+    ASSERT_TRUE(static_cast<bool>(env.api().apply_setting(settings::Key::kConnectivity, "time")));
+    EXPECT_EQ(env.api().weather().freshness, model::WeatherFreshness::kHidden)
+        << "time only = the owner switched weather off";
+}
+
 TEST(PhoneSync, FactoryResetForgetsPhonesToo) {
     Env env;
     env.enable_phone();
